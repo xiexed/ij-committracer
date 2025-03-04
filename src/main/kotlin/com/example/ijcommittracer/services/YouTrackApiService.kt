@@ -2,11 +2,13 @@ package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.CommitTracerBundle
 import com.intellij.credentialStore.CredentialAttributes
+import com.intellij.credentialStore.Credentials
 import com.intellij.credentialStore.generateServiceName
 import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.util.io.HttpRequests
 import org.json.JSONObject
 import java.io.IOException
@@ -100,6 +102,55 @@ class YouTrackApiService(private val project: Project) {
     }
     
     /**
+     * Gets stored YouTrack token or requests a new one from the user.
+     */
+    fun getOrRequestToken(): String? {
+        // Try to get the token from PasswordSafe
+        val credentialAttributes = createCredentialAttributes()
+        val credentials = PasswordSafe.instance.get(credentialAttributes)
+        
+        if (credentials != null && !credentials.getPasswordAsString().isNullOrEmpty()) {
+            return credentials.getPasswordAsString()
+        }
+        
+        // If no token found, prompt the user
+        val token = Messages.showInputDialog(
+            project,
+            CommitTracerBundle.message("dialog.youtrack.token.prompt"),
+            CommitTracerBundle.message("dialog.youtrack.auth"),
+            null
+        ) ?: return null
+        
+        if (token.isBlank()) {
+            return null
+        }
+        
+        // Save the token for future use
+        storeToken(token)
+        
+        return token
+    }
+    
+    /**
+     * Stores the provided token in the password safe.
+     */
+    fun storeToken(token: String) {
+        PasswordSafe.instance.set(
+            createCredentialAttributes(),
+            Credentials("YouTrack API Token", token)
+        )
+        logger.info("YouTrack API token stored successfully")
+    }
+    
+    /**
+     * Clears the stored token.
+     */
+    fun clearToken() {
+        PasswordSafe.instance.set(createCredentialAttributes(), null)
+        logger.info("YouTrack API token cleared")
+    }
+    
+    /**
      * Retrieves the YouTrack API token from password safe.
      */
     private fun getStoredToken(): String? {
@@ -115,6 +166,30 @@ class YouTrackApiService(private val project: Project) {
         return CredentialAttributes(
             generateServiceName("IJ Commit Tracer", CREDENTIAL_KEY)
         )
+    }
+    
+    /**
+     * Verifies if the token is valid by making a test API call.
+     */
+    fun validateToken(token: String): Boolean {
+        try {
+            // Try to fetch a user profile or a simple API endpoint to validate token
+            val url = "$API_BASE_URL/users/me?fields=id,name"
+            val result = HttpRequests.request(url)
+                .tuner { conn ->
+                    conn.setRequestProperty("Authorization", "Bearer $token")
+                    conn.setRequestProperty("Accept", "application/json")
+                }
+                .connect { request ->
+                    val connection = request.connection as HttpURLConnection
+                    connection.responseCode == HttpURLConnection.HTTP_OK
+                }
+            
+            return result
+        } catch (e: IOException) {
+            logger.warn("Failed to validate YouTrack token", e)
+            return false
+        }
     }
     
     /**

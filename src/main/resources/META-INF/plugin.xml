@@ -51,6 +51,24 @@
                     icon="/icons/git-commit.svg">
                 <keyboard-shortcut first-keystroke="control alt G" second-keystroke="L" keymap="$default"/>
             </action>
+            
+            <!-- Add separator before YouTrack actions -->
+            <separator/>
+            
+            <!-- Add YouTrack token configuration actions -->
+            <action id="IjCommitTracer.ConfigureYouTrackToken" 
+                    class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
+                    text="Configure YouTrack Token" 
+                    description="Set or update YouTrack API token"
+                    icon="/icons/youtrack.svg">
+            </action>
+            
+            <action id="IjCommitTracer.ClearYouTrackToken" 
+                    class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
+                    text="Clear YouTrack Token" 
+                    description="Remove stored YouTrack API token"
+                    icon="/icons/youtrack.svg">
+            </action>
         </group>
         
         <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
@@ -60,6 +78,24 @@
                     text="List Repository Commits" 
                     description="Lists all commits in the current repository"
                     icon="/icons/git-commit.svg">
+            </action>
+            
+            <!-- Add separator before YouTrack actions -->
+            <separator/>
+            
+            <!-- Add YouTrack token configuration actions -->
+            <action id="IjCommitTracer.ConfigureYouTrackTokenVcs" 
+                    class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
+                    text="Configure YouTrack Token" 
+                    description="Set or update YouTrack API token"
+                    icon="/icons/youtrack.svg">
+            </action>
+            
+            <action id="IjCommitTracer.ClearYouTrackTokenVcs" 
+                    class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
+                    text="Clear YouTrack Token" 
+                    description="Remove stored YouTrack API token"
+                    icon="/icons/youtrack.svg">
             </action>
         </group>
         
