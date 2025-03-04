@@ -1,0 +1,71 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <!-- Unique identifier of the plugin. It should be FQN. It cannot be changed between the plugin versions. -->
+    <id>com.example.ij-commit-tracer</id>
+
+    <!-- Public plugin name should be written in Title Case.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-name -->
+    <name>IJ Commit Tracer</name>
+
+    <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
+    <vendor url="https://www.yourcompany.com">YourCompany</vendor>
+
+    <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
+         Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
+    <description><![CDATA[
+    A plugin for tracing and analyzing Git commits in IntelliJ IDEA projects.<br>
+    This plugin allows you to:
+    <ul>
+      <li>View a list of all commits in the current repository</li>
+      <li>Track commit history and changes</li>
+      <li>View commit details and branch information</li>
+    </ul>
+  ]]></description>
+
+    <!-- Product and plugin compatibility requirements.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
+    <depends>com.intellij.modules.platform</depends>
+    <depends>Git4Idea</depends>
+
+    <!-- Extension points defined by the plugin.
+         Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Register notification group -->
+        <notificationGroup id="Commit Tracer Notifications" 
+                           displayType="BALLOON" 
+                           toolWindowId="VCS" 
+                           isLogByDefault="true"/>
+    </extensions>
+    
+    <actions>
+        <group id="IjCommitTracer.MainMenu" text="Commit Tracer" description="Commit Tracer Tool">
+            <add-to-group group-id="MainMenu" anchor="last"/>
+            <action id="IjCommitTracer.ListCommits" 
+                    class="com.example.ijcommittracer.actions.ListCommitsAction" 
+                    text="List Repository Commits" 
+                    description="Lists all commits in the current repository"
+                    icon="/icons/git-commit.svg">
+                <keyboard-shortcut first-keystroke="control alt G" second-keystroke="L" keymap="$default"/>
+            </action>
+        </group>
+        
+        <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
+            <add-to-group group-id="VcsGroups" anchor="last"/>
+            <action id="IjCommitTracer.ListCommitsVcs" 
+                    class="com.example.ijcommittracer.actions.ListCommitsAction" 
+                    text="List Repository Commits" 
+                    description="Lists all commits in the current repository"
+                    icon="/icons/git-commit.svg">
+            </action>
+        </group>
+        
+        <!-- Add to the VCS popup menu -->
+        <action id="IjCommitTracer.ListCommitsPopup" 
+                class="com.example.ijcommittracer.actions.ListCommitsAction" 
+                text="List All Commits" 
+                description="Lists all commits in the current repository"
+                icon="/icons/git-commit.svg">
+            <add-to-group group-id="VcsGroups" anchor="last"/>
+        </action>
+    </actions>
+</idea-plugin>
