@@ -19,6 +19,7 @@
       <li>View a list of all commits in the current repository</li>
       <li>Track commit history and changes</li>
       <li>View commit details and branch information</li>
+      <li>View YouTrack issue information for issues mentioned in commits</li>
     </ul>
   ]]></description>
 
@@ -35,6 +36,9 @@
                            displayType="BALLOON" 
                            toolWindowId="VCS" 
                            isLogByDefault="true"/>
+                           
+        <!-- Register services -->
+        <projectService serviceImplementation="com.example.ijcommittracer.services.YouTrackApiService"/>
     </extensions>
     
     <actions>
