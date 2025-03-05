@@ -157,23 +157,35 @@ class ListCommitsAction : AnAction(), DumbAware {
                     firstCommitDate = commit.dateObj,
                     lastCommitDate = commit.dateObj,
                     youTrackTickets = mutableMapOf(),
-                    blockerTickets = mutableMapOf()
+                    blockerTickets = mutableMapOf(),
+                    regressionTickets = mutableMapOf()
                 )
             }
 
             // Update ticket tracking
             val updatedTickets = stats.youTrackTickets.toMutableMap()
             val updatedBlockerTickets = stats.blockerTickets.toMutableMap()
+            val updatedRegressionTickets = stats.regressionTickets.toMutableMap()
             
             tickets.forEach { ticket ->
                 val ticketCommits = updatedTickets.getOrPut(ticket) { mutableListOf() }
                 ticketCommits.add(commit)
                 
-                // Check if this ticket is a blocker by fetching ticket info from YouTrack
+                // Check if this ticket is a blocker or regression by fetching ticket info from YouTrack
                 val ticketInfo = project.getService(com.example.ijcommittracer.services.YouTrackApiService::class.java).fetchTicketInfo(ticket)
-                if (ticketInfo != null && ticketInfo.tags.any { tag -> tag.startsWith("blocking-") }) {
-                    val blockerCommits = updatedBlockerTickets.getOrPut(ticket) { mutableListOf() }
-                    blockerCommits.add(commit)
+                if (ticketInfo != null) {
+                    // Check for blocker tags
+                    if (ticketInfo.tags.any { tag -> tag.startsWith("blocking-") }) {
+                        val blockerCommits = updatedBlockerTickets.getOrPut(ticket) { mutableListOf() }
+                        blockerCommits.add(commit)
+                    }
+                    
+                    // Check for regression in tags or summary (case insensitive)
+                    if (ticketInfo.tags.any { tag -> tag.lowercase().contains("regression") } || 
+                        ticketInfo.summary.lowercase().contains("regression")) {
+                        val regressionCommits = updatedRegressionTickets.getOrPut(ticket) { mutableListOf() }
+                        regressionCommits.add(commit)
+                    }
                 }
             }
 
@@ -182,7 +194,8 @@ class ListCommitsAction : AnAction(), DumbAware {
                 firstCommitDate = if (commit.dateObj.before(stats.firstCommitDate)) commit.dateObj else stats.firstCommitDate,
                 lastCommitDate = if (commit.dateObj.after(stats.lastCommitDate)) commit.dateObj else stats.lastCommitDate,
                 youTrackTickets = updatedTickets,
-                blockerTickets = updatedBlockerTickets
+                blockerTickets = updatedBlockerTickets,
+                regressionTickets = updatedRegressionTickets
             )
 
             authorMap[author] = updatedStats
@@ -279,7 +292,8 @@ class ListCommitsAction : AnAction(), DumbAware {
         val firstCommitDate: Date,
         val lastCommitDate: Date,
         val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
-        val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap()
+        val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
+        val regressionTickets: Map<String, MutableList<CommitInfo>> = emptyMap()
     ) {
         /**
          * Get active days between first and last commit.
@@ -302,6 +316,13 @@ class ListCommitsAction : AnAction(), DumbAware {
          */
         fun getBlockerCount(): Int {
             return blockerTickets.size
+        }
+        
+        /**
+         * Get count of regression tickets.
+         */
+        fun getRegressionCount(): Int {
+            return regressionTickets.size
         }
     }
 }
