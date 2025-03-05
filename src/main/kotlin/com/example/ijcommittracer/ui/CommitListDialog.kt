@@ -413,7 +413,6 @@ class CommitListDialog(
         
         val ticketsLabel = JBLabel(CommitTracerBundle.message("dialog.youtrack.tickets", "0"))
         ticketsPanel.add(ticketsLabel, BorderLayout.NORTH)
-        
         val ticketsTable = JBTable()
         val ticketsScrollPane = JBScrollPane(ticketsTable)
         ticketsPanel.add(ticketsScrollPane, BorderLayout.CENTER)
@@ -487,7 +486,8 @@ class CommitListDialog(
                                 // Update author commits table to show only commits related to this ticket
                                 val ticketCommitsModel = CommitTableModel(ticketInfo.commits)
                                 authorCommitsTable.model = ticketCommitsModel
-                                
+                                authorCommitsTable.rowSorter = TableRowSorter(ticketCommitsModel)
+
                                 // Update label
                                 authorCommitsLabel.text = CommitTracerBundle.message("dialog.ticket.commits", ticketInfo.ticketId, ticketInfo.commits.size.toString())
                                 
