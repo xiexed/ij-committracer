@@ -26,12 +26,11 @@ import java.util.regex.Pattern
  */
 class ListCommitsAction : AnAction(), DumbAware {
 
-    // Pattern for YouTrack ticket references
-    // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
-    private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)")
+
+    private lateinit var project: Project
 
     override fun actionPerformed(e: AnActionEvent) {
-        val project = e.project ?: return
+        project = e.project ?: return
         
         // Get available Git repositories
         val repositories = getRepositories(project)
@@ -58,7 +57,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         // Get default date range (today to 365 days ago)
         val today = Calendar.getInstance()
         val oneYearAgo = Calendar.getInstance()
-        oneYearAgo.add(Calendar.YEAR, -1)
+        oneYearAgo.add(Calendar.MONTH, -1)
 
         // Load commits from the selected repository with date range
         loadCommits(project, selectedRepository, oneYearAgo.time, today.time)
@@ -125,24 +124,26 @@ class ListCommitsAction : AnAction(), DumbAware {
         })
     }
 
-    /**
-     * Extracts YouTrack ticket IDs from commit message
-     */
-    private fun extractYouTrackTickets(message: String): Set<String> {
-        val matcher = youtrackTicketPattern.matcher(message)
-        val tickets = mutableSetOf<String>()
 
-        while (matcher.find()) {
-            tickets.add(matcher.group(1))
+
+    companion object {
+        // Pattern for YouTrack ticket references
+        // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
+        private val youtrackTicketPattern = Regex("\\b(?!MR-|CR-|EA-[A-Z]+-\\d+)[A-Z]+-\\d+\\b")
+
+        /**
+         * Extracts YouTrack ticket IDs from commit message
+         */
+        private fun extractYouTrackTickets(message: String): Set<String> {
+            return youtrackTicketPattern.findAll(message).map { it.value }.toSet()
         }
-
-        return tickets
     }
 
     /**
      * Aggregates commit information by author
      */
     private fun aggregateByAuthor(commits: List<CommitInfo>): Map<String, AuthorStats> {
+        val project = this.project
         val authorMap = mutableMapOf<String, AuthorStats>()
 
         commits.forEach { commit ->
@@ -155,22 +156,33 @@ class ListCommitsAction : AnAction(), DumbAware {
                     commitCount = 0,
                     firstCommitDate = commit.dateObj,
                     lastCommitDate = commit.dateObj,
-                    youTrackTickets = mutableMapOf()
+                    youTrackTickets = mutableMapOf(),
+                    blockerTickets = mutableMapOf()
                 )
             }
 
             // Update ticket tracking
             val updatedTickets = stats.youTrackTickets.toMutableMap()
+            val updatedBlockerTickets = stats.blockerTickets.toMutableMap()
+            
             tickets.forEach { ticket ->
                 val ticketCommits = updatedTickets.getOrPut(ticket) { mutableListOf() }
                 ticketCommits.add(commit)
+                
+                // Check if this ticket is a blocker by fetching ticket info from YouTrack
+                val ticketInfo = project.getService(com.example.ijcommittracer.services.YouTrackApiService::class.java).fetchTicketInfo(ticket)
+                if (ticketInfo != null && ticketInfo.tags.any { tag -> tag.startsWith("blocking-") }) {
+                    val blockerCommits = updatedBlockerTickets.getOrPut(ticket) { mutableListOf() }
+                    blockerCommits.add(commit)
+                }
             }
 
             val updatedStats = stats.copy(
                 commitCount = stats.commitCount + 1,
                 firstCommitDate = if (commit.dateObj.before(stats.firstCommitDate)) commit.dateObj else stats.firstCommitDate,
                 lastCommitDate = if (commit.dateObj.after(stats.lastCommitDate)) commit.dateObj else stats.lastCommitDate,
-                youTrackTickets = updatedTickets
+                youTrackTickets = updatedTickets,
+                blockerTickets = updatedBlockerTickets
             )
 
             authorMap[author] = updatedStats
@@ -266,7 +278,8 @@ class ListCommitsAction : AnAction(), DumbAware {
         val commitCount: Int,
         val firstCommitDate: Date,
         val lastCommitDate: Date,
-        val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap()
+        val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
+        val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap()
     ) {
         /**
          * Get active days between first and last commit.
@@ -282,6 +295,13 @@ class ListCommitsAction : AnAction(), DumbAware {
         fun getCommitsPerDay(): Double {
             val days = getActiveDays()
             return if (days > 0) commitCount.toDouble() / days else 0.0
+        }
+        
+        /**
+         * Get count of blocker tickets.
+         */
+        fun getBlockerCount(): Int {
+            return blockerTickets.size
         }
     }
 }

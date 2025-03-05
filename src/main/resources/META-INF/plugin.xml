@@ -36,9 +36,6 @@
                            displayType="BALLOON" 
                            toolWindowId="VCS" 
                            isLogByDefault="true"/>
-                           
-        <!-- Register services -->
-        <projectService serviceImplementation="com.example.ijcommittracer.services.YouTrackApiService"/>
     </extensions>
     
     <actions>

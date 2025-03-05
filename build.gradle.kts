@@ -24,6 +24,9 @@ dependencies {
         // Add Git4Idea plugin dependency
         bundledPlugin("Git4Idea")
     }
+
+    // Add JSON dependency for YouTrack API
+    implementation("org.json:json:20240205")
 }
 
 intellijPlatform {
@@ -34,9 +37,10 @@ intellijPlatform {
         }
 
         changeNotes = """
-      Initial version with repository commit listing functionality.
+      Initial version with repository commit listing and YouTrack integration.
       - Added action to list all commits in the current repository
       - Added Git integration for commit history retrieval
+      - Added YouTrack integration to show issue details for issues mentioned in commits
     """.trimIndent()
     }
 }

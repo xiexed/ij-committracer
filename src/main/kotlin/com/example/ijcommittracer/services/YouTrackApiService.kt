@@ -26,6 +26,9 @@ class YouTrackApiService(private val project: Project) {
     private val API_BASE_URL = "$YOUTRACK_URL/api"
     private val ISSUE_API_URL = "$API_BASE_URL/issues"
     private val CREDENTIAL_KEY = CommitTracerBundle.message("youtrack.credentials.key")
+    
+    // Cache to avoid repeated API calls for the same ticket
+    private val ticketCache = mutableMapOf<String, TicketInfo>()
 
     /**
      * Fetches ticket information for a specific issue ID.
@@ -39,6 +42,12 @@ class YouTrackApiService(private val project: Project) {
         if (token.isNullOrEmpty()) {
             logger.warn(CommitTracerBundle.message("notification.youtrack.no.token"))
             return null
+        }
+        
+        // Cache for ticket info to avoid repeated API calls
+        val cachedInfo = ticketCache[issueId]
+        if (cachedInfo != null) {
+            return cachedInfo
         }
         
         try {
@@ -55,7 +64,10 @@ class YouTrackApiService(private val project: Project) {
                     when (responseCode) {
                         HttpURLConnection.HTTP_OK -> {
                             val responseText = request.readString()
-                            parseTicketResponse(responseText)
+                            val ticketInfo = parseTicketResponse(responseText)
+                            // Cache the result
+                            ticketCache[issueId] = ticketInfo
+                            ticketInfo
                         }
                         HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN -> {
                             logger.warn(CommitTracerBundle.message("notification.youtrack.auth.error", responseCode))

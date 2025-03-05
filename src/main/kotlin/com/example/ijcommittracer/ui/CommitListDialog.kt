@@ -352,24 +352,26 @@ class CommitListDialog(
             columnModel.getColumn(0).preferredWidth = 200 // Author
             columnModel.getColumn(1).preferredWidth = 80  // Commit Count
             columnModel.getColumn(2).preferredWidth = 80  // Tickets Count
-            columnModel.getColumn(3).preferredWidth = 150 // First Commit
-            columnModel.getColumn(4).preferredWidth = 150 // Last Commit
-            columnModel.getColumn(5).preferredWidth = 80  // Active Days
-            columnModel.getColumn(6).preferredWidth = 120 // Commits/Day
+            columnModel.getColumn(3).preferredWidth = 80  // Blockers Count
+            columnModel.getColumn(4).preferredWidth = 150 // First Commit
+            columnModel.getColumn(5).preferredWidth = 150 // Last Commit
+            columnModel.getColumn(6).preferredWidth = 80  // Active Days
+            columnModel.getColumn(7).preferredWidth = 120 // Commits/Day
             
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
             centerRenderer.horizontalAlignment = SwingConstants.CENTER
             columnModel.getColumn(1).cellRenderer = centerRenderer // Commit Count
             columnModel.getColumn(2).cellRenderer = centerRenderer // Tickets Count
-            columnModel.getColumn(5).cellRenderer = centerRenderer // Active Days
-            columnModel.getColumn(6).cellRenderer = centerRenderer // Commits/Day
+            columnModel.getColumn(3).cellRenderer = centerRenderer // Blockers Count
+            columnModel.getColumn(6).cellRenderer = centerRenderer // Active Days
+            columnModel.getColumn(7).cellRenderer = centerRenderer // Commits/Day
             
             // Add date renderer for date columns to ensure consistent display
             val dateRenderer = DefaultTableCellRenderer()
             dateRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(3).cellRenderer = dateRenderer // First Commit
-            columnModel.getColumn(4).cellRenderer = dateRenderer // Last Commit
+            columnModel.getColumn(4).cellRenderer = dateRenderer // First Commit
+            columnModel.getColumn(5).cellRenderer = dateRenderer // Last Commit
             
             // Add row sorter for sorting with appropriate comparators
             val sorter = TableRowSorter(tableModel)
@@ -377,8 +379,9 @@ class CommitListDialog(
             // Make sure numeric columns are sorted as numbers
             sorter.setComparator(1, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
             sorter.setComparator(2, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
-            sorter.setComparator(5, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
-            sorter.setComparator(6, Comparator.comparingDouble<Any> {
+            sorter.setComparator(3, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
+            sorter.setComparator(6, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            sorter.setComparator(7, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
@@ -450,7 +453,11 @@ class CommitListDialog(
                     
                     // Update tickets table
                     val tickets = author.youTrackTickets.entries
-                        .map { (ticket, commits) -> TicketInfo(ticket, commits) }
+                        .map { (ticket, commits) -> 
+                            // Check if this ticket is in the blocker tickets
+                            val isBlocker = author.blockerTickets.containsKey(ticket)
+                            TicketInfo(ticket, commits, isBlocker)
+                        }
                         .toList()
                     
                     val ticketsModel = TicketsTableModel(tickets)
@@ -459,15 +466,22 @@ class CommitListDialog(
                     // Configure ticket table columns
                     ticketsTable.columnModel.getColumn(0).preferredWidth = 120  // Ticket ID
                     ticketsTable.columnModel.getColumn(1).preferredWidth = 80   // Commit Count
+                    ticketsTable.columnModel.getColumn(2).preferredWidth = 80   // Blocker
                     
                     // Center-align numeric columns
                     val centerRenderer = DefaultTableCellRenderer()
                     centerRenderer.horizontalAlignment = SwingConstants.CENTER
                     ticketsTable.columnModel.getColumn(1).cellRenderer = centerRenderer // Commit Count
                     
+                    // Boolean renderer for blocker column
+                    ticketsTable.columnModel.getColumn(2).cellRenderer = DefaultTableCellRenderer().apply {
+                        horizontalAlignment = SwingConstants.CENTER
+                    }
+                    
                     // Add row sorter for tickets table
                     val ticketsSorter = TableRowSorter(ticketsModel)
                     ticketsSorter.setComparator(1, Comparator.comparingInt<Any> { (it as Number).toInt() })
+                    ticketsSorter.setComparator(2, Comparator.comparing<Any, Boolean> { it as Boolean })
                     
                     // Sort by commit count (descending) by default
                     ticketsSorter.toggleSortOrder(1)
@@ -523,7 +537,8 @@ class CommitListDialog(
      */
     private data class TicketInfo(
         val ticketId: String,
-        val commits: List<CommitInfo>
+        val commits: List<CommitInfo>,
+        val isBlocker: Boolean = false
     )
     
     /**
@@ -579,6 +594,7 @@ class CommitListDialog(
             CommitTracerBundle.message("dialog.column.author"),
             CommitTracerBundle.message("dialog.column.author.commits"),
             CommitTracerBundle.message("dialog.column.author.tickets"),
+            "Blockers",
             CommitTracerBundle.message("dialog.column.author.first"),
             CommitTracerBundle.message("dialog.column.author.last"),
             CommitTracerBundle.message("dialog.column.author.days"),
@@ -601,9 +617,9 @@ class CommitListDialog(
         
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return when (columnIndex) {
-                1, 2 -> Integer::class.java  // Commits & Tickets Count - using Integer instead of Int
-                5 -> Long::class.java     // Active Days
-                6 -> Double::class.java   // Commits/Day
+                1, 2, 3 -> Integer::class.java  // Commits, Tickets, and Blockers Count
+                6 -> Long::class.java     // Active Days
+                7 -> Double::class.java   // Commits/Day
                 else -> String::class.java
             }
         }
@@ -614,10 +630,11 @@ class CommitListDialog(
                 0 -> author.author
                 1 -> author.commitCount
                 2 -> author.youTrackTickets.size
-                3 -> dateFormat.format(author.firstCommitDate)
-                4 -> dateFormat.format(author.lastCommitDate)
-                5 -> author.getActiveDays()
-                6 -> author.getCommitsPerDay()  // Return actual double value, not formatted string
+                3 -> author.getBlockerCount()
+                4 -> dateFormat.format(author.firstCommitDate)
+                5 -> dateFormat.format(author.lastCommitDate)
+                6 -> author.getActiveDays()
+                7 -> author.getCommitsPerDay()  // Return actual double value, not formatted string
                 else -> ""
             }
         }
@@ -629,7 +646,8 @@ class CommitListDialog(
     private class TicketsTableModel(private val tickets: List<TicketInfo>) : AbstractTableModel() {
         private val columns = arrayOf(
             CommitTracerBundle.message("dialog.column.ticket.id"),
-            CommitTracerBundle.message("dialog.column.ticket.commits")
+            CommitTracerBundle.message("dialog.column.ticket.commits"),
+            "Blocker"
         )
         
         override fun getRowCount(): Int = tickets.size
@@ -641,6 +659,7 @@ class CommitListDialog(
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return when (columnIndex) {
                 1 -> Integer::class.java  // Commits count
+                2 -> Boolean::class.java  // Blocker status
                 else -> String::class.java
             }
         }
@@ -650,6 +669,7 @@ class CommitListDialog(
             return when (columnIndex) {
                 0 -> ticket.ticketId
                 1 -> ticket.commits.size
+                2 -> ticket.isBlocker
                 else -> ""
             }
         }
