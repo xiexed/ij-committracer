@@ -90,13 +90,13 @@ class CommitListDialog(
         // Create tabbed pane for different views
         val tabbedPane = JBTabbedPane()
         
-        // Add commits tab
-        val commitsPanel = createCommitsPanel()
-        tabbedPane.addTab(CommitTracerBundle.message("dialog.tab.all.commits"), commitsPanel)
-        
-        // Add authors tab
+        // Add authors tab first
         val authorsPanel = createAuthorsPanel()
         tabbedPane.addTab(CommitTracerBundle.message("dialog.tab.by.author"), authorsPanel)
+        
+        // Add commits tab second
+        val commitsPanel = createCommitsPanel()
+        tabbedPane.addTab(CommitTracerBundle.message("dialog.tab.all.commits"), commitsPanel)
         
         panel.add(tabbedPane, BorderLayout.CENTER)
         
