@@ -290,11 +290,10 @@ class CommitListDialog(
         val tableModel = CommitTableModel(filteredCommits)
         commitsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-            columnModel.getColumn(0).preferredWidth = 80  // Hash
-            columnModel.getColumn(1).preferredWidth = 150 // Author
-            columnModel.getColumn(2).preferredWidth = 150 // Date
-            columnModel.getColumn(3).preferredWidth = 350 // Message
-            columnModel.getColumn(4).preferredWidth = 50  // Tests
+            columnModel.getColumn(0).preferredWidth = 150 // Date
+            columnModel.getColumn(1).preferredWidth = 400 // Message
+            columnModel.getColumn(2).preferredWidth = 80  // Hash 
+            columnModel.getColumn(3).preferredWidth = 50  // Tests
             
             // Create a custom renderer for the Tests column with green/red icons
             val testsRenderer = object : DefaultTableCellRenderer() {
@@ -318,10 +317,22 @@ class CommitListDialog(
                     return label
                 }
             }
-            columnModel.getColumn(4).cellRenderer = testsRenderer
+            columnModel.getColumn(3).cellRenderer = testsRenderer
             
             // Add row sorter for sorting
             val sorter = TableRowSorter(tableModel)
+            
+            // Set comparator for the date column to sort by date
+            sorter.setComparator(0, Comparator<String> { date1, date2 ->
+                try {
+                    val d1 = displayDateTimeFormat.parse(date1)
+                    val d2 = displayDateTimeFormat.parse(date2)
+                    d1.compareTo(d2)
+                } catch (e: Exception) {
+                    date1.compareTo(date2)
+                }
+            })
+            
             rowSorter = sorter
             
             // Add document listener to filter table when text changes
@@ -1073,10 +1084,9 @@ class CommitListDialog(
      */
     private class CommitTableModel(private var commits: List<CommitInfo>) : AbstractTableModel() {
         private val columns = arrayOf(
-            CommitTracerBundle.message("dialog.column.hash"),
-            CommitTracerBundle.message("dialog.column.author"),
             CommitTracerBundle.message("dialog.column.date"),
             CommitTracerBundle.message("dialog.column.message"),
+            CommitTracerBundle.message("dialog.column.hash"),
             CommitTracerBundle.message("dialog.column.tests")
         )
 
@@ -1093,7 +1103,7 @@ class CommitListDialog(
         
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return when (columnIndex) {
-                4 -> Boolean::class.java // Tests column is boolean
+                3 -> Boolean::class.java // Tests column is boolean
                 else -> String::class.java
             }
         }
@@ -1101,7 +1111,13 @@ class CommitListDialog(
         override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
             val commit = commits[rowIndex]
             return when (columnIndex) {
-                0 -> {
+                0 -> commit.date
+                1 -> {
+                    // Get first line of commit message or truncate if necessary
+                    val message = commit.message.lines().firstOrNull() ?: ""
+                    if (message.length > 100) message.substring(0, 97) + "..." else message
+                }
+                2 -> {
                     val shortHash = commit.hash.substring(0, 7)
                     if (commit.branches.isNotEmpty()) {
                         "$shortHash *" // Add an indicator for commits with branches
@@ -1109,14 +1125,7 @@ class CommitListDialog(
                         shortHash
                     }
                 }
-                1 -> commit.author
-                2 -> commit.date
-                3 -> {
-                    // Get first line of commit message or truncate if necessary
-                    val message = commit.message.lines().firstOrNull() ?: ""
-                    if (message.length > 100) message.substring(0, 97) + "..." else message
-                }
-                4 -> commit.testsTouched // Whether tests were touched
+                3 -> commit.testsTouched // Whether tests were touched
                 else -> ""
             }
         }
