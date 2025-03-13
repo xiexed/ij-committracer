@@ -347,8 +347,8 @@ class CommitListDialog(
                         sorter.rowFilter = null
                     } else {
                         try {
-                            // Create case-insensitive regex filter for all columns
-                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                            // Create case-insensitive regex filter for message column (1)
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 1)
                         } catch (ex: java.util.regex.PatternSyntaxException) {
                             // If the regex pattern is invalid, just show all rows
                             sorter.rowFilter = null
@@ -563,8 +563,8 @@ class CommitListDialog(
                         sorter.rowFilter = null
                     } else {
                         try {
-                            // Create case-insensitive regex filter for all columns
-                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                            // Create case-insensitive regex filter for author column (0)
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
                         } catch (ex: java.util.regex.PatternSyntaxException) {
                             // If the regex pattern is invalid, just show all rows
                             sorter.rowFilter = null
@@ -834,8 +834,8 @@ class CommitListDialog(
                                 sorter.rowFilter = null
                             } else {
                                 try {
-                                    // Create case-insensitive regex filter for all columns
-                                    sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                                    // Create case-insensitive regex filter for message column (3)
+                                    sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 3)
                                 } catch (ex: java.util.regex.PatternSyntaxException) {
                                     // If the regex pattern is invalid, just show all rows
                                     sorter.rowFilter = null
