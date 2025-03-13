@@ -9,7 +9,6 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.util.io.HttpRequests
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -20,10 +19,10 @@ import java.net.HttpURLConnection
 @Service(Service.Level.PROJECT)
 class YouTrackService(private val project: Project) {
 
-    private val YOUTRACK_URL = "https://youtrack.jetbrains.com"
-    private val API_BASE_URL = "$YOUTRACK_URL/api"
-    private val ISSUE_API_URL = "$API_BASE_URL/issues"
-    private val CREDENTIAL_KEY = "commit-tracer-youtrack-token"
+    private val youtrackUrl = "https://youtrack.jetbrains.com"
+    private val apiBaseUrl = "$youtrackUrl/api"
+    private val issueApiUrl = "$apiBaseUrl/issues"
+    private val credentialKey = "commit-tracer-youtrack-token"
 
     /**
      * Fetches issue details from YouTrack by issue ID.
@@ -36,7 +35,7 @@ class YouTrackService(private val project: Project) {
         val token = getOrRequestToken() ?: return null
 
         try {
-            val url = "$ISSUE_API_URL/$issueId?fields=id,summary,tags(name,color)"
+            val url = "$issueApiUrl/$issueId?fields=id,summary,tags(name,color)"
             
             val connection = HttpRequests.request(url)
                 .tuner { connection ->
@@ -159,7 +158,7 @@ class YouTrackService(private val project: Project) {
      */
     private fun createCredentialAttributes(): CredentialAttributes {
         return CredentialAttributes(
-            generateServiceName("IJ Commit Tracer", CREDENTIAL_KEY)
+            generateServiceName("IJ Commit Tracer", credentialKey)
         )
     }
 

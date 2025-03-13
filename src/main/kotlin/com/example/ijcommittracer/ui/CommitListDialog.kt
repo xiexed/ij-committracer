@@ -1,35 +1,30 @@
 package com.example.ijcommittracer.ui
 
 import com.example.ijcommittracer.CommitTracerBundle
-import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
 import com.example.ijcommittracer.actions.ListCommitsAction.AuthorStats
+import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
 import com.example.ijcommittracer.services.NotificationService
-import com.intellij.openapi.project.Project
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
-import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
-import git4idea.repo.GitRepository
 import git4idea.history.GitHistoryUtils
+import git4idea.repo.GitRepository
 import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
-import java.awt.GridBagConstraints
-import java.awt.GridBagLayout
-import java.awt.event.ActionEvent
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
 import javax.swing.*
-import javax.swing.RowFilter
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.TableRowSorter
@@ -265,10 +260,10 @@ class CommitListDialog(
         
         // Create filter panel at the top
         val filterPanel = JPanel(BorderLayout())
-        filterPanel.border = JBUI.Borders.empty(0, 0, 5, 0)
+        filterPanel.border = JBUI.Borders.emptyBottom(5)
         
         val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
-        searchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        searchLabel.border = JBUI.Borders.empty(0, 5)
         filterPanel.add(searchLabel, BorderLayout.WEST)
         
         val searchField = JTextField().apply {
@@ -393,10 +388,10 @@ class CommitListDialog(
         
         // Create filter panel at the top
         val filterPanel = JPanel(BorderLayout())
-        filterPanel.border = JBUI.Borders.empty(0, 0, 5, 0)
+        filterPanel.border = JBUI.Borders.emptyBottom(5)
         
         val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
-        searchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        searchLabel.border = JBUI.Borders.empty(0, 5)
         filterPanel.add(searchLabel, BorderLayout.WEST)
         
         val searchField = JTextField().apply {
@@ -509,7 +504,7 @@ class CommitListDialog(
         // Add search field for filtering author's commits
         val authorCommitsSearchPanel = JPanel(BorderLayout())
         val authorCommitsSearchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
-        authorCommitsSearchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        authorCommitsSearchLabel.border = JBUI.Borders.empty(0, 5)
         authorCommitsSearchPanel.add(authorCommitsSearchLabel, BorderLayout.WEST)
         
         val authorCommitsSearchField = JTextField().apply {
@@ -543,7 +538,7 @@ class CommitListDialog(
         // Add search field for filtering tickets
         val ticketsSearchPanel = JPanel(BorderLayout())
         val ticketsSearchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
-        ticketsSearchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        ticketsSearchLabel.border = JBUI.Borders.empty(0, 5)
         ticketsSearchPanel.add(ticketsSearchLabel, BorderLayout.WEST)
         
         val ticketsSearchField = JTextField().apply {

@@ -22,10 +22,10 @@ import java.net.HttpURLConnection
 class YouTrackApiService(private val project: Project) {
     private val logger = Logger.getInstance(YouTrackApiService::class.java)
     
-    private val YOUTRACK_URL = CommitTracerBundle.message("youtrack.api.url")
-    private val API_BASE_URL = "$YOUTRACK_URL/api"
-    private val ISSUE_API_URL = "$API_BASE_URL/issues"
-    private val CREDENTIAL_KEY = CommitTracerBundle.message("youtrack.credentials.key")
+    private val youtrackUrl = CommitTracerBundle.message("youtrack.api.url")
+    private val apiBaseUrl = "$youtrackUrl/api"
+    private val issueApiUrl = "$apiBaseUrl/issues"
+    private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
     
     // Cache to avoid repeated API calls for the same ticket
     private val ticketCache = mutableMapOf<String, TicketInfo>()
@@ -51,7 +51,7 @@ class YouTrackApiService(private val project: Project) {
         }
         
         try {
-            val url = "$ISSUE_API_URL/$issueId?fields=idReadable,summary,tags(name,id)"
+            val url = "$issueApiUrl/$issueId?fields=idReadable,summary,tags(name,id)"
             val connection = HttpRequests.request(url)
                 .tuner { conn ->
                     conn.setRequestProperty("Authorization", "Bearer $token")
@@ -176,7 +176,7 @@ class YouTrackApiService(private val project: Project) {
      */
     private fun createCredentialAttributes(): CredentialAttributes {
         return CredentialAttributes(
-            generateServiceName("IJ Commit Tracer", CREDENTIAL_KEY)
+            generateServiceName("IJ Commit Tracer", credentialKey)
         )
     }
     
@@ -186,7 +186,7 @@ class YouTrackApiService(private val project: Project) {
     fun validateToken(token: String): Boolean {
         try {
             // Try to fetch a user profile or a simple API endpoint to validate token
-            val url = "$API_BASE_URL/users/me?fields=id,name"
+            val url = "$apiBaseUrl/users/me?fields=id,name"
             val result = HttpRequests.request(url)
                 .tuner { conn ->
                     conn.setRequestProperty("Authorization", "Bearer $token")

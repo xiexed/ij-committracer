@@ -4,9 +4,9 @@ import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.ui.CommitListDialog
 import com.example.ijcommittracer.ui.SelectRepositoryDialog
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -20,7 +20,6 @@ import git4idea.repo.GitRepositoryManager
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
-import java.util.regex.Pattern
 
 /**
  * Action that lists all commits in the current Git repository.
@@ -270,7 +269,8 @@ class ListCommitsAction : AnAction(), DumbAware {
      * Checks if a commit is part of the current branch.
      */
     private fun isCommitInCurrentBranch(commit: GitCommit, repository: GitRepository): Boolean {
-        val currentBranch = repository.currentBranch ?: return false
+        // Check if repository has a current branch
+        if (repository.currentBranch == null) return false
         
         // Simplified check - all commits loaded with git log are part of current branch
         // A more accurate check would require running additional git commands

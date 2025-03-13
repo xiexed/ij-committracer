@@ -17,6 +17,9 @@ import javax.swing.SwingConstants
 
 /**
  * UI component for displaying YouTrack issue information.
+ *
+ * TODO: This panel is currently not used in the application.
+ * It's implemented for future integration with YouTrack issue details display.
  */
 class YouTrackIssuePanel(private val issue: YouTrackIssue) : JBPanel<YouTrackIssuePanel>(BorderLayout()) {
     

@@ -3,9 +3,9 @@ package com.example.ijcommittracer.actions
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.services.YouTrackApiService
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
