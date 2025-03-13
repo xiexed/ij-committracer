@@ -462,6 +462,9 @@ class CommitListDialog(
             
             // Create a custom renderer for the Test Coverage % column with color-coding
             val testCoverageRenderer = object : DefaultTableCellRenderer() {
+                // Use a local formatter for percentage values
+                private val percentageFormat = DecimalFormat("0.00", DecimalFormatSymbols(Locale.US))
+                
                 override fun getTableCellRendererComponent(
                     table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
                 ): Component {
@@ -470,7 +473,7 @@ class CommitListDialog(
                     
                     if (value is Number) {
                         val percentage = value.toDouble()
-                        label.text = commitsDayFormat.format(percentage) + "%"
+                        label.text = percentageFormat.format(percentage) + "%"
                         
                         // Color code based on test coverage percentage
                         when {
