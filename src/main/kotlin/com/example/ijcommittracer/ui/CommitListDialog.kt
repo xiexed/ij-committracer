@@ -763,11 +763,10 @@ class CommitListDialog(
                     }
                     
                     // Configure columns
-                    authorCommitsTable.columnModel.getColumn(0).preferredWidth = 80  // Hash
-                    authorCommitsTable.columnModel.getColumn(1).preferredWidth = 150 // Author
-                    authorCommitsTable.columnModel.getColumn(2).preferredWidth = 150 // Date
-                    authorCommitsTable.columnModel.getColumn(3).preferredWidth = 350 // Message
-                    authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
+                    authorCommitsTable.columnModel.getColumn(0).preferredWidth = 150 // Date
+                    authorCommitsTable.columnModel.getColumn(1).preferredWidth = 400 // Message
+                    authorCommitsTable.columnModel.getColumn(2).preferredWidth = 80  // Hash
+                    authorCommitsTable.columnModel.getColumn(3).preferredWidth = 50  // Tests
                     
                     // Create a custom renderer for the Tests column with green/red icons
                     val testsRenderer = object : DefaultTableCellRenderer() {
@@ -791,7 +790,7 @@ class CommitListDialog(
                             return label
                         }
                     }
-                    authorCommitsTable.columnModel.getColumn(4).cellRenderer = testsRenderer
+                    authorCommitsTable.columnModel.getColumn(3).cellRenderer = testsRenderer
                     
                     // Add row sorter for author commits table
                     val sorter = TableRowSorter(authorCommitsModel)
@@ -959,7 +958,7 @@ class CommitListDialog(
                                 }
                                 
                                 // Configure columns
-                                authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
+                                authorCommitsTable.columnModel.getColumn(3).preferredWidth = 50  // Tests
                                 
                                 // Create a custom renderer for the Tests column with green/red icons
                                 val testsRenderer = object : DefaultTableCellRenderer() {
@@ -983,7 +982,7 @@ class CommitListDialog(
                                         return label
                                     }
                                 }
-                                authorCommitsTable.columnModel.getColumn(4).cellRenderer = testsRenderer
+                                authorCommitsTable.columnModel.getColumn(3).cellRenderer = testsRenderer
                                 
                                 val ticketCommitsSorter = TableRowSorter(ticketCommitsModel)
                                 authorCommitsTable.rowSorter = ticketCommitsSorter
