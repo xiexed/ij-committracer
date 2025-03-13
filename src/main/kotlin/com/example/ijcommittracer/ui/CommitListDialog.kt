@@ -14,6 +14,9 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.table.JBTable
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
+import com.intellij.ui.JBColor
+import java.awt.Component
+import java.awt.Font
 import git4idea.history.GitHistoryUtils
 import git4idea.repo.GitRepository
 import java.awt.BorderLayout
@@ -289,11 +292,29 @@ class CommitListDialog(
             columnModel.getColumn(3).preferredWidth = 350 // Message
             columnModel.getColumn(4).preferredWidth = 50  // Tests
             
-            // Center-align and add renderer for the Tests column
-            val booleanRenderer = DefaultTableCellRenderer().apply {
-                horizontalAlignment = SwingConstants.CENTER
+            // Create a custom renderer for the Tests column with green/red icons
+            val testsRenderer = object : DefaultTableCellRenderer() {
+                override fun getTableCellRendererComponent(
+                    table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+                ): Component {
+                    val label = super.getTableCellRendererComponent(table, "", isSelected, hasFocus, row, column) as JLabel
+                    label.horizontalAlignment = SwingConstants.CENTER
+                    
+                    if (value == true) {
+                        // Green checkmark for test touches
+                        label.text = "✓"
+                        label.foreground = JBColor.GREEN
+                        label.font = label.font.deriveFont(Font.BOLD)
+                    } else {
+                        // Red X for no test touches
+                        label.text = "✗"
+                        label.foreground = JBColor.RED
+                    }
+                    
+                    return label
+                }
             }
-            columnModel.getColumn(4).cellRenderer = booleanRenderer
+            columnModel.getColumn(4).cellRenderer = testsRenderer
             
             // Add row sorter for sorting
             val sorter = TableRowSorter(tableModel)
@@ -438,7 +459,33 @@ class CommitListDialog(
             columnModel.getColumn(3).cellRenderer = centerRenderer // Blockers Count
             columnModel.getColumn(4).cellRenderer = centerRenderer // Regressions Count
             columnModel.getColumn(5).cellRenderer = centerRenderer // Test Commits Count
-            columnModel.getColumn(6).cellRenderer = centerRenderer // Test Coverage %
+            
+            // Create a custom renderer for the Test Coverage % column with color-coding
+            val testCoverageRenderer = object : DefaultTableCellRenderer() {
+                override fun getTableCellRendererComponent(
+                    table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+                ): Component {
+                    val label = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column) as JLabel
+                    label.horizontalAlignment = SwingConstants.CENTER
+                    
+                    if (value is Number) {
+                        val percentage = value.toDouble()
+                        label.text = commitsDayFormat.format(percentage) + "%"
+                        
+                        // Color code based on test coverage percentage
+                        when {
+                            percentage >= 75.0 -> label.foreground = JBColor.GREEN.darker()
+                            percentage >= 50.0 -> label.foreground = JBColor.ORANGE
+                            percentage >= 25.0 -> label.foreground = JBColor.YELLOW.darker()
+                            else -> label.foreground = JBColor.RED
+                        }
+                    }
+                    
+                    return label
+                }
+            }
+            columnModel.getColumn(6).cellRenderer = testCoverageRenderer // Test Coverage %
+            
             columnModel.getColumn(9).cellRenderer = centerRenderer // Active Days
             
             // Create special renderer for commits/day with 2 decimal places
@@ -606,11 +653,29 @@ class CommitListDialog(
                     authorCommitsTable.columnModel.getColumn(3).preferredWidth = 350 // Message
                     authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
                     
-                    // Center-align and add renderer for the Tests column
-                    val booleanRenderer = DefaultTableCellRenderer().apply {
-                        horizontalAlignment = SwingConstants.CENTER
+                    // Create a custom renderer for the Tests column with green/red icons
+                    val testsRenderer = object : DefaultTableCellRenderer() {
+                        override fun getTableCellRendererComponent(
+                            table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+                        ): Component {
+                            val label = super.getTableCellRendererComponent(table, "", isSelected, hasFocus, row, column) as JLabel
+                            label.horizontalAlignment = SwingConstants.CENTER
+                            
+                            if (value == true) {
+                                // Green checkmark for test touches
+                                label.text = "✓"
+                                label.foreground = JBColor.GREEN
+                                label.font = label.font.deriveFont(Font.BOLD)
+                            } else {
+                                // Red X for no test touches
+                                label.text = "✗"
+                                label.foreground = JBColor.RED
+                            }
+                            
+                            return label
+                        }
                     }
-                    authorCommitsTable.columnModel.getColumn(4).cellRenderer = booleanRenderer
+                    authorCommitsTable.columnModel.getColumn(4).cellRenderer = testsRenderer
                     
                     // Add row sorter for author commits table
                     val sorter = TableRowSorter(authorCommitsModel)
@@ -717,6 +782,33 @@ class CommitListDialog(
                                 // Update author commits table to show only commits related to this ticket
                                 val ticketCommitsModel = CommitTableModel(ticketInfo.commits)
                                 authorCommitsTable.model = ticketCommitsModel
+                                
+                                // Configure columns
+                                authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
+                                
+                                // Create a custom renderer for the Tests column with green/red icons
+                                val testsRenderer = object : DefaultTableCellRenderer() {
+                                    override fun getTableCellRendererComponent(
+                                        table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+                                    ): Component {
+                                        val label = super.getTableCellRendererComponent(table, "", isSelected, hasFocus, row, column) as JLabel
+                                        label.horizontalAlignment = SwingConstants.CENTER
+                                        
+                                        if (value == true) {
+                                            // Green checkmark for test touches
+                                            label.text = "✓"
+                                            label.foreground = JBColor.GREEN
+                                            label.font = label.font.deriveFont(Font.BOLD)
+                                        } else {
+                                            // Red X for no test touches
+                                            label.text = "✗"
+                                            label.foreground = JBColor.RED
+                                        }
+                                        
+                                        return label
+                                    }
+                                }
+                                authorCommitsTable.columnModel.getColumn(4).cellRenderer = testsRenderer
                                 
                                 val ticketCommitsSorter = TableRowSorter(ticketCommitsModel)
                                 authorCommitsTable.rowSorter = ticketCommitsSorter
