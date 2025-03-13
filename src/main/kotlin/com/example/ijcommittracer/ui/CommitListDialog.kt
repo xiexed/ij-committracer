@@ -695,6 +695,13 @@ class CommitListDialog(
         authorDetailsTabbedPane.addTab(CommitTracerBundle.message("dialog.tab.all.commits"), authorCommitsPanel)
         authorDetailsTabbedPane.addTab("YouTrack Tickets", ticketsPanel)
         
+        // Add a change listener to clear the changed files panel when switching tabs
+        authorDetailsTabbedPane.addChangeListener { 
+            // Clear the changed files panel when changing tabs
+            changedFilesListModel.clear()
+            changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+        }
+        
         // Add selection listener to show author details
         authorsTable.selectionModel.addListSelectionListener { e ->
             if (!e.valueIsAdjusting) {
@@ -709,6 +716,10 @@ class CommitListDialog(
                     // Update author commits table
                     val authorCommitsModel = CommitTableModel(authorCommits)
                     authorCommitsTable.model = authorCommitsModel
+                    
+                    // Clear the changed files panel when author selection changes
+                    changedFilesListModel.clear()
+                    changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
                     
                     // Configure columns
                     authorCommitsTable.columnModel.getColumn(0).preferredWidth = 80  // Hash
@@ -871,6 +882,10 @@ class CommitListDialog(
                                 // Update author commits table to show only commits related to this ticket
                                 val ticketCommitsModel = CommitTableModel(ticketInfo.commits)
                                 authorCommitsTable.model = ticketCommitsModel
+                                
+                                // Clear the changed files panel when ticket selection changes
+                                changedFilesListModel.clear()
+                                changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
                                 
                                 // Configure columns
                                 authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
