@@ -29,6 +29,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
 import javax.swing.*
+import javax.swing.RowFilter
 import javax.swing.table.AbstractTableModel
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.TableRowSorter
@@ -262,6 +263,27 @@ class CommitListDialog(
     private fun createCommitsPanel(): JComponent {
         val panel = JPanel(BorderLayout())
         
+        // Create filter panel at the top
+        val filterPanel = JPanel(BorderLayout())
+        filterPanel.border = JBUI.Borders.empty(0, 0, 5, 0)
+        
+        val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        searchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        filterPanel.add(searchLabel, BorderLayout.WEST)
+        
+        val searchField = JTextField().apply {
+            // Add clear button (X) with escape key handler to clear the field
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+        }
+        filterPanel.add(searchField, BorderLayout.CENTER)
+        panel.add(filterPanel, BorderLayout.NORTH)
+        
         // Create table with commits
         val tableModel = CommitTableModel(filteredCommits)
         commitsTable = JBTable(tableModel).apply {
@@ -274,6 +296,28 @@ class CommitListDialog(
             // Add row sorter for sorting
             val sorter = TableRowSorter(tableModel)
             rowSorter = sorter
+            
+            // Add document listener to filter table when text changes
+            searchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                
+                private fun filterTable() {
+                    val text = searchField.text
+                    if (text.isNullOrBlank()) {
+                        sorter.rowFilter = null
+                    } else {
+                        try {
+                            // Create case-insensitive regex filter for all columns
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                        } catch (ex: java.util.regex.PatternSyntaxException) {
+                            // If the regex pattern is invalid, just show all rows
+                            sorter.rowFilter = null
+                        }
+                    }
+                }
+            })
         }
         
         // Create detail panel for selected commit
@@ -347,6 +391,27 @@ class CommitListDialog(
     private fun createAuthorsPanel(): JComponent {
         val panel = JPanel(BorderLayout())
         
+        // Create filter panel at the top
+        val filterPanel = JPanel(BorderLayout())
+        filterPanel.border = JBUI.Borders.empty(0, 0, 5, 0)
+        
+        val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        searchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        filterPanel.add(searchLabel, BorderLayout.WEST)
+        
+        val searchField = JTextField().apply {
+            // Add clear button (X) with escape key handler to clear the field
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+        }
+        filterPanel.add(searchField, BorderLayout.CENTER)
+        panel.add(filterPanel, BorderLayout.NORTH)
+        
         // Create table with author statistics
         val tableModel = AuthorTableModel(authorStats.values.toList())
         authorsTable = JBTable(tableModel).apply {
@@ -405,6 +470,28 @@ class CommitListDialog(
             sorter.toggleSortOrder(1) // Toggle twice to get descending order
             
             rowSorter = sorter
+            
+            // Add document listener to filter table when text changes
+            searchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                
+                private fun filterTable() {
+                    val text = searchField.text
+                    if (text.isNullOrBlank()) {
+                        sorter.rowFilter = null
+                    } else {
+                        try {
+                            // Create case-insensitive regex filter for all columns
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                        } catch (ex: java.util.regex.PatternSyntaxException) {
+                            // If the regex pattern is invalid, just show all rows
+                            sorter.rowFilter = null
+                        }
+                    }
+                }
+            })
         }
         
         // Create tabbed panel for details
@@ -414,8 +501,31 @@ class CommitListDialog(
         val authorCommitsPanel = JPanel(BorderLayout())
         authorCommitsPanel.border = JBUI.Borders.empty(5)
         
+        // Panel for label and search field
+        val authorCommitsHeaderPanel = JPanel(BorderLayout())
         val authorCommitsLabel = JBLabel(CommitTracerBundle.message("dialog.author.commits", "", "0"))
-        authorCommitsPanel.add(authorCommitsLabel, BorderLayout.NORTH)
+        authorCommitsHeaderPanel.add(authorCommitsLabel, BorderLayout.WEST)
+        
+        // Add search field for filtering author's commits
+        val authorCommitsSearchPanel = JPanel(BorderLayout())
+        val authorCommitsSearchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        authorCommitsSearchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        authorCommitsSearchPanel.add(authorCommitsSearchLabel, BorderLayout.WEST)
+        
+        val authorCommitsSearchField = JTextField().apply {
+            preferredSize = Dimension(150, preferredSize.height)
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+        }
+        authorCommitsSearchPanel.add(authorCommitsSearchField, BorderLayout.CENTER)
+        authorCommitsHeaderPanel.add(authorCommitsSearchPanel, BorderLayout.EAST)
+        
+        authorCommitsPanel.add(authorCommitsHeaderPanel, BorderLayout.NORTH)
         
         val authorCommitsTable = JBTable()
         val authorCommitsScrollPane = JBScrollPane(authorCommitsTable)
@@ -425,8 +535,32 @@ class CommitListDialog(
         val ticketsPanel = JPanel(BorderLayout())
         ticketsPanel.border = JBUI.Borders.empty(5)
         
+        // Panel for label and search field
+        val ticketsHeaderPanel = JPanel(BorderLayout())
         val ticketsLabel = JBLabel(CommitTracerBundle.message("dialog.youtrack.tickets", "0"))
-        ticketsPanel.add(ticketsLabel, BorderLayout.NORTH)
+        ticketsHeaderPanel.add(ticketsLabel, BorderLayout.WEST)
+        
+        // Add search field for filtering tickets
+        val ticketsSearchPanel = JPanel(BorderLayout())
+        val ticketsSearchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        ticketsSearchLabel.border = JBUI.Borders.empty(0, 5, 0, 5)
+        ticketsSearchPanel.add(ticketsSearchLabel, BorderLayout.WEST)
+        
+        val ticketsSearchField = JTextField().apply {
+            preferredSize = Dimension(150, preferredSize.height)
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+        }
+        ticketsSearchPanel.add(ticketsSearchField, BorderLayout.CENTER)
+        ticketsHeaderPanel.add(ticketsSearchPanel, BorderLayout.EAST)
+        
+        ticketsPanel.add(ticketsHeaderPanel, BorderLayout.NORTH)
+        
         val ticketsTable = JBTable()
         val ticketsScrollPane = JBScrollPane(ticketsTable)
         ticketsPanel.add(ticketsScrollPane, BorderLayout.CENTER)
@@ -459,6 +593,28 @@ class CommitListDialog(
                     // Add row sorter for author commits table
                     val sorter = TableRowSorter(authorCommitsModel)
                     authorCommitsTable.rowSorter = sorter
+                    
+                    // Set up filtering on the search field
+                    authorCommitsSearchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                        override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        
+                        private fun filterTable() {
+                            val text = authorCommitsSearchField.text
+                            if (text.isNullOrBlank()) {
+                                sorter.rowFilter = null
+                            } else {
+                                try {
+                                    // Create case-insensitive regex filter for all columns
+                                    sorter.rowFilter = RowFilter.regexFilter("(?i)" + text)
+                                } catch (ex: java.util.regex.PatternSyntaxException) {
+                                    // If the regex pattern is invalid, just show all rows
+                                    sorter.rowFilter = null
+                                }
+                            }
+                        }
+                    })
                     
                     authorCommitsLabel.text = CommitTracerBundle.message("dialog.author.commits", author.author, authorCommits.size.toString())
                     
@@ -506,6 +662,28 @@ class CommitListDialog(
                     
                     ticketsTable.rowSorter = ticketsSorter
                     
+                    // Set up filtering on the search field
+                    ticketsSearchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                        override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                        
+                        private fun filterTable() {
+                            val text = ticketsSearchField.text
+                            if (text.isNullOrBlank()) {
+                                ticketsSorter.rowFilter = null
+                            } else {
+                                try {
+                                    // Create case-insensitive regex filter for ticket ID column (0)
+                                    ticketsSorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
+                                } catch (ex: java.util.regex.PatternSyntaxException) {
+                                    // If the regex pattern is invalid, just show all rows
+                                    ticketsSorter.rowFilter = null
+                                }
+                            }
+                        }
+                    })
+                    
                     // Add selection listener to tickets table
                     ticketsTable.selectionModel.addListSelectionListener { ticketEvent ->
                         if (!ticketEvent.valueIsAdjusting) {
@@ -517,7 +695,31 @@ class CommitListDialog(
                                 // Update author commits table to show only commits related to this ticket
                                 val ticketCommitsModel = CommitTableModel(ticketInfo.commits)
                                 authorCommitsTable.model = ticketCommitsModel
-                                authorCommitsTable.rowSorter = TableRowSorter(ticketCommitsModel)
+                                
+                                val ticketCommitsSorter = TableRowSorter(ticketCommitsModel)
+                                authorCommitsTable.rowSorter = ticketCommitsSorter
+                                
+                                // Set up filtering on the author commits search field for ticket commits
+                                authorCommitsSearchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
+                                    override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                                    override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                                    override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                                    
+                                    private fun filterTable() {
+                                        val text = authorCommitsSearchField.text
+                                        if (text.isNullOrBlank()) {
+                                            ticketCommitsSorter.rowFilter = null
+                                        } else {
+                                            try {
+                                                // Create case-insensitive regex filter for message column (3)
+                                                ticketCommitsSorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 3)
+                                            } catch (ex: java.util.regex.PatternSyntaxException) {
+                                                // If the regex pattern is invalid, just show all rows
+                                                ticketCommitsSorter.rowFilter = null
+                                            }
+                                        }
+                                    }
+                                })
 
                                 // Update label
                                 authorCommitsLabel.text = CommitTracerBundle.message("dialog.ticket.commits", ticketInfo.ticketId, ticketInfo.commits.size.toString())
