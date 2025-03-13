@@ -6,6 +6,7 @@ import com.example.ijcommittracer.ui.CommitListDialog
 import com.example.ijcommittracer.ui.SelectRepositoryDialog
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -208,6 +209,12 @@ class ListCommitsAction : AnAction(), DumbAware {
         // Enable the action only if a project is open and has Git VCS
         val project = e.project
         e.presentation.isEnabledAndVisible = project != null && hasGitRepository(project)
+    }
+    
+    override fun getActionUpdateThread(): ActionUpdateThread {
+        // Use EDT (Event Dispatch Thread) since we're just checking if Git repository exists
+        // and updating UI visibility - these are lightweight operations
+        return ActionUpdateThread.EDT
     }
     
     private fun hasGitRepository(project: Project): Boolean {
