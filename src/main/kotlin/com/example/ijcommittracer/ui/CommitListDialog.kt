@@ -2,13 +2,17 @@ package com.example.ijcommittracer.ui
 
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.actions.ListCommitsAction.AuthorStats
+import com.example.ijcommittracer.actions.ListCommitsAction.ChangedFileInfo
+import com.example.ijcommittracer.actions.ListCommitsAction.ChangeType
 import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
+import com.intellij.icons.AllIcons
 import com.example.ijcommittracer.services.NotificationService
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.table.JBTable
@@ -592,9 +596,66 @@ class CommitListDialog(
         
         authorCommitsPanel.add(authorCommitsHeaderPanel, BorderLayout.NORTH)
         
+        // Create author commits table
         val authorCommitsTable = JBTable()
         val authorCommitsScrollPane = JBScrollPane(authorCommitsTable)
-        authorCommitsPanel.add(authorCommitsScrollPane, BorderLayout.CENTER)
+        
+        // Create changed files panel
+        val changedFilesPanel = JPanel(BorderLayout())
+        changedFilesPanel.border = JBUI.Borders.empty(5, 0, 0, 0)
+        
+        val changedFilesLabel = JBLabel(CommitTracerBundle.message("dialog.changed.files"))
+        changedFilesLabel.border = JBUI.Borders.empty(0, 0, 5, 0)
+        changedFilesPanel.add(changedFilesLabel, BorderLayout.NORTH)
+        
+        // Create a list model and JList for the changed files
+        val changedFilesListModel = DefaultListModel<ChangedFileInfo>()
+        val changedFilesList = JBList<ChangedFileInfo>(changedFilesListModel).apply {
+            setCellRenderer(object : DefaultListCellRenderer() {
+                override fun getListCellRendererComponent(
+                    list: JList<*>,
+                    value: Any?,
+                    index: Int,
+                    isSelected: Boolean,
+                    cellHasFocus: Boolean
+                ): Component {
+                    val component = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus)
+                    if (value is ChangedFileInfo && component is JLabel) {
+                        // Add appropriate icons and formatting based on change type
+                        when (value.changeType) {
+                            ChangeType.ADDED -> {
+                                component.text = "[+] ${value.path}"
+                                component.icon = AllIcons.Actions.AddFile
+                            }
+                            ChangeType.DELETED -> {
+                                component.text = "[-] ${value.path}"
+                                component.icon = AllIcons.Actions.DeleteTag
+                            }
+                            ChangeType.MODIFIED -> {
+                                component.text = "[M] ${value.path}"
+                                component.icon = AllIcons.Actions.Edit
+                            }
+                        }
+                        
+                        // Set text color to green for test files
+                        if (value.isTestFile) {
+                            component.foreground = JBColor.GREEN.darker()
+                            // Override the change type icon with the test icon for test files
+                            component.icon = AllIcons.Nodes.JunitTestMark
+                        }
+                    }
+                    return component
+                }
+            })
+        }
+        
+        changedFilesPanel.add(JBScrollPane(changedFilesList), BorderLayout.CENTER)
+        
+        // Split the author commits panel vertically
+        val splitPane = com.intellij.ui.OnePixelSplitter(true, 0.6f)
+        splitPane.firstComponent = authorCommitsScrollPane
+        splitPane.secondComponent = changedFilesPanel
+        authorCommitsPanel.add(splitPane, BorderLayout.CENTER)
         
         // Create YouTrack tickets panel
         val ticketsPanel = JPanel(BorderLayout())
@@ -683,6 +744,31 @@ class CommitListDialog(
                     // Add row sorter for author commits table
                     val sorter = TableRowSorter(authorCommitsModel)
                     authorCommitsTable.rowSorter = sorter
+                    
+                    // Add selection listener to update changed files panel
+                    authorCommitsTable.selectionModel.addListSelectionListener { e ->
+                        if (!e.valueIsAdjusting) {
+                            val selectedRow = authorCommitsTable.selectedRow
+                            if (selectedRow >= 0) {
+                                val modelRow = authorCommitsTable.convertRowIndexToModel(selectedRow)
+                                val commit = authorCommits[modelRow]
+                                
+                                // Update the changed files list
+                                changedFilesListModel.clear()
+                                if (commit.changedFiles.isNotEmpty()) {
+                                    // Sort files by path, with test files first
+                                    val sortedFiles = commit.changedFiles.sortedWith(
+                                        compareByDescending<ChangedFileInfo> { it.isTestFile }
+                                        .thenBy { it.path.lowercase() }
+                                    )
+                                    sortedFiles.forEach { changedFilesListModel.addElement(it) }
+                                    changedFilesLabel.text = "${CommitTracerBundle.message("dialog.changed.files")} (${commit.changedFiles.size})"
+                                } else {
+                                    changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                }
+                            }
+                        }
+                    }
                     
                     // Set up filtering on the search field
                     authorCommitsSearchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
@@ -816,6 +902,35 @@ class CommitListDialog(
                                 val ticketCommitsSorter = TableRowSorter(ticketCommitsModel)
                                 authorCommitsTable.rowSorter = ticketCommitsSorter
                                 
+                                // Reset and clear changed files panel
+                                changedFilesListModel.clear()
+                                changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                
+                                // Add selection listener for the ticket-specific commits
+                                authorCommitsTable.selectionModel.addListSelectionListener { e ->
+                                    if (!e.valueIsAdjusting) {
+                                        val selectedRow = authorCommitsTable.selectedRow
+                                        if (selectedRow >= 0) {
+                                            val modelRow = authorCommitsTable.convertRowIndexToModel(selectedRow)
+                                            val commit = ticketInfo.commits[modelRow]
+                                            
+                                            // Update the changed files list
+                                            changedFilesListModel.clear()
+                                            if (commit.changedFiles.isNotEmpty()) {
+                                                // Sort files by path, with test files first
+                                                val sortedFiles = commit.changedFiles.sortedWith(
+                                                    compareByDescending<ChangedFileInfo> { it.isTestFile }
+                                                    .thenBy { it.path.lowercase() }
+                                                )
+                                                sortedFiles.forEach { changedFilesListModel.addElement(it) }
+                                                changedFilesLabel.text = "${CommitTracerBundle.message("dialog.changed.files")} (${commit.changedFiles.size})"
+                                            } else {
+                                                changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                            }
+                                        }
+                                    }
+                                }
+                                
                                 // Set up filtering on the author commits search field for ticket commits
                                 authorCommitsSearchField.document.addDocumentListener(object : javax.swing.event.DocumentListener {
                                     override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
@@ -854,11 +969,11 @@ class CommitListDialog(
         }
         
         // Split view: table on top, details below
-        val splitPane = com.intellij.ui.OnePixelSplitter(true, 0.5f)
-        splitPane.firstComponent = JBScrollPane(authorsTable)
-        splitPane.secondComponent = authorDetailsTabbedPane
+        val splitPane2 = com.intellij.ui.OnePixelSplitter(true, 0.5f)
+        splitPane2.firstComponent = JBScrollPane(authorsTable)
+        splitPane2.secondComponent = authorDetailsTabbedPane
         
-        panel.add(splitPane, BorderLayout.CENTER)
+        panel.add(splitPane2, BorderLayout.CENTER)
         
         // Select first row by default if there are authors
         if (authorStats.isNotEmpty()) {

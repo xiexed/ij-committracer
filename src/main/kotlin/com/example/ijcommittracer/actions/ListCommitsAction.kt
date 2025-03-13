@@ -231,6 +231,26 @@ class ListCommitsAction : AnAction(), DumbAware {
     }
     
     /**
+     * Checks if a path corresponds to a test file.
+     * 
+     * @param path The file path to check
+     * @return true if the path looks like a test file, false otherwise
+     */
+    private fun isTestFile(path: String): Boolean {
+        return path.contains("/test/") || 
+               path.contains("/tests/") || 
+               path.contains("Test.") || 
+               path.contains("Tests.") ||
+               path.endsWith("Test.kt") ||
+               path.endsWith("Test.java") ||
+               path.endsWith("Tests.kt") ||
+               path.endsWith("Tests.java") ||
+               path.endsWith("Spec.kt") ||
+               path.endsWith("Spec.java") ||
+               path.endsWith("_test.go")
+    }
+    
+    /**
      * Checks if a commit touches test files by examining affected paths.
      * 
      * @param gitCommit The GitCommit to check
@@ -241,18 +261,29 @@ class ListCommitsAction : AnAction(), DumbAware {
         val changedFiles = gitCommit.changes.mapNotNull { it.afterRevision?.file?.path }
         
         // Check if any path looks like a test file
-        return changedFiles.any { path ->
-            path.contains("/test/") || 
-            path.contains("/tests/") || 
-            path.contains("Test.") || 
-            path.contains("Tests.") ||
-            path.endsWith("Test.kt") ||
-            path.endsWith("Test.java") ||
-            path.endsWith("Tests.kt") ||
-            path.endsWith("Tests.java") ||
-            path.endsWith("Spec.kt") ||
-            path.endsWith("Spec.java") ||
-            path.endsWith("_test.go")
+        return changedFiles.any { path -> isTestFile(path) }
+    }
+    
+    /**
+     * Extracts changed file information from a Git commit.
+     * 
+     * @param gitCommit The GitCommit to extract files from
+     * @return List of ChangedFileInfo with path and test file status
+     */
+    private fun extractChangedFiles(gitCommit: GitCommit): List<ChangedFileInfo> {
+        return gitCommit.changes.mapNotNull { change ->
+            val changeType = when {
+                change.beforeRevision == null && change.afterRevision != null -> ChangeType.ADDED
+                change.beforeRevision != null && change.afterRevision == null -> ChangeType.DELETED
+                else -> ChangeType.MODIFIED
+            }
+            
+            val path = when (changeType) {
+                ChangeType.DELETED -> change.beforeRevision?.file?.path
+                else -> change.afterRevision?.file?.path
+            } ?: return@mapNotNull null
+            
+            ChangedFileInfo(path, isTestFile(path), changeType)
         }
     }
     
@@ -287,6 +318,9 @@ class ListCommitsAction : AnAction(), DumbAware {
             // Check if the commit touches test files
             val testsTouched = isTestTouched(gitCommit)
             
+            // Extract changed files information
+            val changedFiles = extractChangedFiles(gitCommit)
+            
             CommitInfo(
                 hash = gitCommit.id.toString(),
                 author = gitCommit.author.email,
@@ -295,7 +329,8 @@ class ListCommitsAction : AnAction(), DumbAware {
                 message = gitCommit.fullMessage.trim(),
                 repositoryName = repository.root.name,
                 branches = listOfNotNull(currentBranch).takeIf { isCommitInCurrentBranch(gitCommit, repository) } ?: emptyList(),
-                testsTouched = testsTouched
+                testsTouched = testsTouched,
+                changedFiles = changedFiles
             )
         }
     }
@@ -323,8 +358,27 @@ class ListCommitsAction : AnAction(), DumbAware {
         val message: String,
         val repositoryName: String,
         val branches: List<String> = emptyList(),
-        val testsTouched: Boolean = false // Whether this commit touches test files
+        val testsTouched: Boolean = false, // Whether this commit touches test files
+        val changedFiles: List<ChangedFileInfo> = emptyList() // List of files changed in this commit
     )
+    
+    /**
+     * Data class representing a changed file in a commit.
+     */
+    data class ChangedFileInfo(
+        val path: String,
+        val isTestFile: Boolean,
+        val changeType: ChangeType = ChangeType.MODIFIED
+    )
+    
+    /**
+     * Enum representing the type of change to a file.
+     */
+    enum class ChangeType {
+        ADDED,
+        MODIFIED,
+        DELETED
+    }
 
     /**
      * Data class representing aggregated stats for an author.
