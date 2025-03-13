@@ -60,7 +60,7 @@ class CommitListDialog(
     
     // Other date formatters with consistent Locale.US
     private val displayDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val displayDateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    private val displayDateTimeFormat = SimpleDateFormat("dd/MM/yy, HH:mm", Locale.US)
     
     // Pattern for YouTrack ticket references
     // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
@@ -290,9 +290,9 @@ class CommitListDialog(
         val tableModel = CommitTableModel(filteredCommits)
         commitsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-            columnModel.getColumn(0).preferredWidth = 150 // Date
-            columnModel.getColumn(1).preferredWidth = 400 // Message
-            columnModel.getColumn(2).preferredWidth = 80  // Hash 
+            columnModel.getColumn(0).preferredWidth = 450 // Message
+            columnModel.getColumn(1).preferredWidth = 120 // Date (dd/MM/yy, HH:mm)
+            columnModel.getColumn(2).preferredWidth = 80  // Hash (7 chars + potential *)
             columnModel.getColumn(3).preferredWidth = 50  // Tests
             
             // Create a custom renderer for the Tests column with green/red icons
@@ -323,7 +323,7 @@ class CommitListDialog(
             val sorter = TableRowSorter(tableModel)
             
             // Set comparator for the date column to sort by date
-            sorter.setComparator(0, Comparator<String> { date1, date2 ->
+            sorter.setComparator(1, Comparator<String> { date1, date2 ->
                 try {
                     val d1 = displayDateTimeFormat.parse(date1)
                     val d2 = displayDateTimeFormat.parse(date2)
@@ -347,8 +347,8 @@ class CommitListDialog(
                         sorter.rowFilter = null
                     } else {
                         try {
-                            // Create case-insensitive regex filter for message column (1)
-                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 1)
+                            // Create case-insensitive regex filter for message column (0)
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
                         } catch (ex: java.util.regex.PatternSyntaxException) {
                             // If the regex pattern is invalid, just show all rows
                             sorter.rowFilter = null
@@ -763,8 +763,8 @@ class CommitListDialog(
                     }
                     
                     // Configure columns
-                    authorCommitsTable.columnModel.getColumn(0).preferredWidth = 150 // Date
-                    authorCommitsTable.columnModel.getColumn(1).preferredWidth = 400 // Message
+                    authorCommitsTable.columnModel.getColumn(0).preferredWidth = 450 // Message
+                    authorCommitsTable.columnModel.getColumn(1).preferredWidth = 120 // Date
                     authorCommitsTable.columnModel.getColumn(2).preferredWidth = 80  // Hash
                     authorCommitsTable.columnModel.getColumn(3).preferredWidth = 50  // Tests
                     
@@ -1028,8 +1028,8 @@ class CommitListDialog(
                                             ticketCommitsSorter.rowFilter = null
                                         } else {
                                             try {
-                                                // Create case-insensitive regex filter for message column (3)
-                                                ticketCommitsSorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 3)
+                                                // Create case-insensitive regex filter for message column (0)
+                                                ticketCommitsSorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
                                             } catch (ex: java.util.regex.PatternSyntaxException) {
                                                 // If the regex pattern is invalid, just show all rows
                                                 ticketCommitsSorter.rowFilter = null
@@ -1083,8 +1083,8 @@ class CommitListDialog(
      */
     private class CommitTableModel(private var commits: List<CommitInfo>) : AbstractTableModel() {
         private val columns = arrayOf(
-            CommitTracerBundle.message("dialog.column.date"),
             CommitTracerBundle.message("dialog.column.message"),
+            CommitTracerBundle.message("dialog.column.date"),
             CommitTracerBundle.message("dialog.column.hash"),
             CommitTracerBundle.message("dialog.column.tests")
         )
@@ -1110,11 +1110,20 @@ class CommitListDialog(
         override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
             val commit = commits[rowIndex]
             return when (columnIndex) {
-                0 -> commit.date
-                1 -> {
+                0 -> {
                     // Get first line of commit message or truncate if necessary
                     val message = commit.message.lines().firstOrNull() ?: ""
                     if (message.length > 100) message.substring(0, 97) + "..." else message
+                }
+                1 -> {
+                    // Format the date according to the new format
+                    try {
+                        val date = displayDateTimeFormat.parse(commit.date)
+                        displayDateTimeFormat.format(date)
+                    } catch (e: Exception) {
+                        // If parsing fails, return the original date string
+                        commit.date
+                    }
                 }
                 2 -> {
                     val shortHash = commit.hash.substring(0, 7)
