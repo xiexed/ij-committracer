@@ -325,8 +325,10 @@ class CommitListDialog(
             // Set comparator for the date column to sort by date
             sorter.setComparator(1, Comparator<String> { date1, date2 ->
                 try {
-                    val d1 = displayDateTimeFormat.parse(date1)
-                    val d2 = displayDateTimeFormat.parse(date2)
+                    // Create a format parser for the displayed date format
+                    val dateFormat = SimpleDateFormat("dd/MM/yy, HH:mm", Locale.US)
+                    val d1 = dateFormat.parse(date1)
+                    val d2 = dateFormat.parse(date2)
                     d1.compareTo(d2)
                 } catch (e: Exception) {
                     date1.compareTo(date2)
@@ -1107,6 +1109,8 @@ class CommitListDialog(
             }
         }
 
+        private val dateTimeFormat = SimpleDateFormat("dd/MM/yy, HH:mm", Locale.US)
+        
         override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
             val commit = commits[rowIndex]
             return when (columnIndex) {
@@ -1118,8 +1122,10 @@ class CommitListDialog(
                 1 -> {
                     // Format the date according to the new format
                     try {
-                        val date = displayDateTimeFormat.parse(commit.date)
-                        displayDateTimeFormat.format(date)
+                        // Try to parse the original date using the format stored in commits
+                        val originalFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                        val date = originalFormat.parse(commit.date)
+                        dateTimeFormat.format(date)
                     } catch (e: Exception) {
                         // If parsing fails, return the original date string
                         commit.date
