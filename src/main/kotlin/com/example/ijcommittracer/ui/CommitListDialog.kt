@@ -286,7 +286,14 @@ class CommitListDialog(
             columnModel.getColumn(0).preferredWidth = 80  // Hash
             columnModel.getColumn(1).preferredWidth = 150 // Author
             columnModel.getColumn(2).preferredWidth = 150 // Date
-            columnModel.getColumn(3).preferredWidth = 400 // Message
+            columnModel.getColumn(3).preferredWidth = 350 // Message
+            columnModel.getColumn(4).preferredWidth = 50  // Tests
+            
+            // Center-align and add renderer for the Tests column
+            val booleanRenderer = DefaultTableCellRenderer().apply {
+                horizontalAlignment = SwingConstants.CENTER
+            }
+            columnModel.getColumn(4).cellRenderer = booleanRenderer
             
             // Add row sorter for sorting
             val sorter = TableRowSorter(tableModel)
@@ -416,10 +423,12 @@ class CommitListDialog(
             columnModel.getColumn(2).preferredWidth = 80  // Tickets Count
             columnModel.getColumn(3).preferredWidth = 80  // Blockers Count
             columnModel.getColumn(4).preferredWidth = 80  // Regressions Count
-            columnModel.getColumn(5).preferredWidth = 150 // First Commit
-            columnModel.getColumn(6).preferredWidth = 150 // Last Commit
-            columnModel.getColumn(7).preferredWidth = 80  // Active Days
-            columnModel.getColumn(8).preferredWidth = 120 // Commits/Day
+            columnModel.getColumn(5).preferredWidth = 80  // Test Commits Count
+            columnModel.getColumn(6).preferredWidth = 80  // Test Coverage %
+            columnModel.getColumn(7).preferredWidth = 150 // First Commit
+            columnModel.getColumn(8).preferredWidth = 150 // Last Commit
+            columnModel.getColumn(9).preferredWidth = 80  // Active Days
+            columnModel.getColumn(10).preferredWidth = 120 // Commits/Day
             
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
@@ -428,19 +437,21 @@ class CommitListDialog(
             columnModel.getColumn(2).cellRenderer = centerRenderer // Tickets Count
             columnModel.getColumn(3).cellRenderer = centerRenderer // Blockers Count
             columnModel.getColumn(4).cellRenderer = centerRenderer // Regressions Count
-            columnModel.getColumn(7).cellRenderer = centerRenderer // Active Days
+            columnModel.getColumn(5).cellRenderer = centerRenderer // Test Commits Count
+            columnModel.getColumn(6).cellRenderer = centerRenderer // Test Coverage %
+            columnModel.getColumn(9).cellRenderer = centerRenderer // Active Days
             
             // Create special renderer for commits/day with 2 decimal places
             val commitsPerDayRenderer = DefaultTableCellRenderer().apply {
                 horizontalAlignment = SwingConstants.CENTER
             }
-            columnModel.getColumn(8).cellRenderer = commitsPerDayRenderer // Commits/Day
+            columnModel.getColumn(10).cellRenderer = commitsPerDayRenderer // Commits/Day
             
             // Add date renderer for date columns to ensure consistent display
             val dateRenderer = DefaultTableCellRenderer()
             dateRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(5).cellRenderer = dateRenderer // First Commit
-            columnModel.getColumn(6).cellRenderer = dateRenderer // Last Commit
+            columnModel.getColumn(7).cellRenderer = dateRenderer // First Commit
+            columnModel.getColumn(8).cellRenderer = dateRenderer // Last Commit
             
             // Add row sorter for sorting with appropriate comparators
             val sorter = TableRowSorter(tableModel)
@@ -450,9 +461,18 @@ class CommitListDialog(
             sorter.setComparator(2, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
             sorter.setComparator(3, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
             sorter.setComparator(4, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
-            sorter.setComparator(7, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            sorter.setComparator(5, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
+            // Test coverage % - use numeric value for sorting
+            sorter.setComparator(6, Comparator.comparingDouble<Any> {
+                when (it) {
+                    is Number -> it.toDouble()
+                    is String -> it.toDoubleOrNull() ?: 0.0
+                    else -> 0.0
+                }
+            })
+            sorter.setComparator(9, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
             // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
-            sorter.setComparator(8, Comparator.comparingDouble<Any> {
+            sorter.setComparator(10, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
@@ -583,7 +603,14 @@ class CommitListDialog(
                     authorCommitsTable.columnModel.getColumn(0).preferredWidth = 80  // Hash
                     authorCommitsTable.columnModel.getColumn(1).preferredWidth = 150 // Author
                     authorCommitsTable.columnModel.getColumn(2).preferredWidth = 150 // Date
-                    authorCommitsTable.columnModel.getColumn(3).preferredWidth = 400 // Message
+                    authorCommitsTable.columnModel.getColumn(3).preferredWidth = 350 // Message
+                    authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
+                    
+                    // Center-align and add renderer for the Tests column
+                    val booleanRenderer = DefaultTableCellRenderer().apply {
+                        horizontalAlignment = SwingConstants.CENTER
+                    }
+                    authorCommitsTable.columnModel.getColumn(4).cellRenderer = booleanRenderer
                     
                     // Add row sorter for author commits table
                     val sorter = TableRowSorter(authorCommitsModel)
@@ -764,7 +791,8 @@ class CommitListDialog(
             CommitTracerBundle.message("dialog.column.hash"),
             CommitTracerBundle.message("dialog.column.author"),
             CommitTracerBundle.message("dialog.column.date"),
-            CommitTracerBundle.message("dialog.column.message")
+            CommitTracerBundle.message("dialog.column.message"),
+            CommitTracerBundle.message("dialog.column.tests")
         )
 
         fun updateData(newCommits: List<CommitInfo>) {
@@ -777,6 +805,13 @@ class CommitListDialog(
         override fun getColumnCount(): Int = columns.size
 
         override fun getColumnName(column: Int): String = columns[column]
+        
+        override fun getColumnClass(columnIndex: Int): Class<*> {
+            return when (columnIndex) {
+                4 -> Boolean::class.java // Tests column is boolean
+                else -> String::class.java
+            }
+        }
 
         override fun getValueAt(rowIndex: Int, columnIndex: Int): Any {
             val commit = commits[rowIndex]
@@ -796,6 +831,7 @@ class CommitListDialog(
                     val message = commit.message.lines().firstOrNull() ?: ""
                     if (message.length > 100) message.substring(0, 97) + "..." else message
                 }
+                4 -> commit.testsTouched // Whether tests were touched
                 else -> ""
             }
         }
@@ -811,6 +847,8 @@ class CommitListDialog(
             CommitTracerBundle.message("dialog.column.author.tickets"),
             "Blockers",
             "Regressions",
+            "Test Commits",
+            "Test %",
             CommitTracerBundle.message("dialog.column.author.first"),
             CommitTracerBundle.message("dialog.column.author.last"),
             CommitTracerBundle.message("dialog.column.author.days"),
@@ -834,9 +872,9 @@ class CommitListDialog(
         
         override fun getColumnClass(columnIndex: Int): Class<*> {
             return when (columnIndex) {
-                1, 2, 3, 4 -> Integer::class.java  // Commits, Tickets, Blockers and Regressions Count
-                7 -> Long::class.java     // Active Days
-                8 -> Double::class.java   // Commits/Day
+                1, 2, 3, 4, 5 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count
+                6, 10 -> Double::class.java  // Test % and Commits/Day
+                9 -> Long::class.java     // Active Days
                 else -> String::class.java
             }
         }
@@ -849,10 +887,15 @@ class CommitListDialog(
                 2 -> author.youTrackTickets.size
                 3 -> author.getBlockerCount()
                 4 -> author.getRegressionCount()
-                5 -> dateFormat.format(author.firstCommitDate)
-                6 -> dateFormat.format(author.lastCommitDate)
-                7 -> author.getActiveDays()
-                8 -> {
+                5 -> author.testTouchedCount
+                6 -> {
+                    val testPercentage = author.getTestCoveragePercentage()
+                    commitsDayFormat.format(testPercentage).toDouble()
+                }
+                7 -> dateFormat.format(author.firstCommitDate)
+                8 -> dateFormat.format(author.lastCommitDate)
+                9 -> author.getActiveDays()
+                10 -> {
                     val commitsPerDay = author.getCommitsPerDay()
                     // Format for display while maintaining the Double type for sorting
                     commitsDayFormat.format(commitsPerDay).toDouble()

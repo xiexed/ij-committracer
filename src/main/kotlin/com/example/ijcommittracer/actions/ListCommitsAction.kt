@@ -189,13 +189,17 @@ class ListCommitsAction : AnAction(), DumbAware {
                 }
             }
 
+            // Update test-touched count if this commit touched tests
+            val updatedTestTouchedCount = if (commit.testsTouched) stats.testTouchedCount + 1 else stats.testTouchedCount
+            
             val updatedStats = stats.copy(
                 commitCount = stats.commitCount + 1,
                 firstCommitDate = if (commit.dateObj.before(stats.firstCommitDate)) commit.dateObj else stats.firstCommitDate,
                 lastCommitDate = if (commit.dateObj.after(stats.lastCommitDate)) commit.dateObj else stats.lastCommitDate,
                 youTrackTickets = updatedTickets,
                 blockerTickets = updatedBlockerTickets,
-                regressionTickets = updatedRegressionTickets
+                regressionTickets = updatedRegressionTickets,
+                testTouchedCount = updatedTestTouchedCount
             )
 
             authorMap[author] = updatedStats
@@ -226,6 +230,32 @@ class ListCommitsAction : AnAction(), DumbAware {
         return GitRepositoryManager.getInstance(project).repositories
     }
     
+    /**
+     * Checks if a commit touches test files by examining affected paths.
+     * 
+     * @param gitCommit The GitCommit to check
+     * @return true if any affected path contains test files, false otherwise
+     */
+    private fun isTestTouched(gitCommit: GitCommit): Boolean {
+        // Get affected files from the commit
+        val changedFiles = gitCommit.changes.mapNotNull { it.afterRevision?.file?.path }
+        
+        // Check if any path looks like a test file
+        return changedFiles.any { path ->
+            path.contains("/test/") || 
+            path.contains("/tests/") || 
+            path.contains("Test.") || 
+            path.contains("Tests.") ||
+            path.endsWith("Test.kt") ||
+            path.endsWith("Test.java") ||
+            path.endsWith("Tests.kt") ||
+            path.endsWith("Tests.java") ||
+            path.endsWith("Spec.kt") ||
+            path.endsWith("Spec.java") ||
+            path.endsWith("_test.go")
+        }
+    }
+    
     private fun getCommits(
         project: Project,
         repository: GitRepository,
@@ -253,6 +283,10 @@ class ListCommitsAction : AnAction(), DumbAware {
         
         return commits.map { gitCommit ->
             val commitDate = Date(gitCommit.authorTime)
+            
+            // Check if the commit touches test files
+            val testsTouched = isTestTouched(gitCommit)
+            
             CommitInfo(
                 hash = gitCommit.id.toString(),
                 author = gitCommit.author.email,
@@ -260,7 +294,8 @@ class ListCommitsAction : AnAction(), DumbAware {
                 dateObj = commitDate, // Store actual Date object for sorting
                 message = gitCommit.fullMessage.trim(),
                 repositoryName = repository.root.name,
-                branches = listOfNotNull(currentBranch).takeIf { isCommitInCurrentBranch(gitCommit, repository) } ?: emptyList()
+                branches = listOfNotNull(currentBranch).takeIf { isCommitInCurrentBranch(gitCommit, repository) } ?: emptyList(),
+                testsTouched = testsTouched
             )
         }
     }
@@ -287,7 +322,8 @@ class ListCommitsAction : AnAction(), DumbAware {
         val dateObj: Date, // For internal use in filtering and sorting
         val message: String,
         val repositoryName: String,
-        val branches: List<String> = emptyList()
+        val branches: List<String> = emptyList(),
+        val testsTouched: Boolean = false // Whether this commit touches test files
     )
 
     /**
@@ -300,7 +336,8 @@ class ListCommitsAction : AnAction(), DumbAware {
         val lastCommitDate: Date,
         val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
         val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
-        val regressionTickets: Map<String, MutableList<CommitInfo>> = emptyMap()
+        val regressionTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
+        val testTouchedCount: Int = 0
     ) {
         /**
          * Get active days between first and last commit.
@@ -330,6 +367,13 @@ class ListCommitsAction : AnAction(), DumbAware {
          */
         fun getRegressionCount(): Int {
             return regressionTickets.size
+        }
+        
+        /**
+         * Get test coverage percentage (commits that touch tests / total commits).
+         */
+        fun getTestCoveragePercentage(): Double {
+            return if (commitCount > 0) (testTouchedCount.toDouble() / commitCount) * 100 else 0.0
         }
     }
 }
