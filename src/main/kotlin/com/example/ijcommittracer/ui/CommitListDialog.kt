@@ -721,6 +721,36 @@ class CommitListDialog(
                     changedFilesListModel.clear()
                     changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
                     
+                    // Select the first commit by default if available
+                    if (authorCommits.isNotEmpty()) {
+                        SwingUtilities.invokeLater {
+                            if (authorCommitsTable.rowCount > 0) {
+                                try {
+                                    authorCommitsTable.setRowSelectionInterval(0, 0)
+                                    authorCommitsTable.scrollRectToVisible(authorCommitsTable.getCellRect(0, 0, true))
+                                    
+                                    // Manually update the changed files list for the first commit
+                                    val selectedCommit = authorCommits[0]
+                                    changedFilesListModel.clear()
+                                    if (selectedCommit.changedFiles.isNotEmpty()) {
+                                        // Sort files by path, with test files first
+                                        val sortedFiles = selectedCommit.changedFiles.sortedWith(
+                                            compareByDescending<ChangedFileInfo> { it.isTestFile }
+                                            .thenBy { it.path.lowercase() }
+                                        )
+                                        sortedFiles.forEach { changedFilesListModel.addElement(it) }
+                                        changedFilesLabel.text = "${CommitTracerBundle.message("dialog.changed.files")} (${selectedCommit.changedFiles.size})"
+                                    } else {
+                                        changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                    }
+                                } catch (e: Exception) {
+                                    // Log any error but continue
+                                    println("Error selecting first commit: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                    
                     // Configure columns
                     authorCommitsTable.columnModel.getColumn(0).preferredWidth = 80  // Hash
                     authorCommitsTable.columnModel.getColumn(1).preferredWidth = 150 // Author
@@ -886,6 +916,36 @@ class CommitListDialog(
                                 // Clear the changed files panel when ticket selection changes
                                 changedFilesListModel.clear()
                                 changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                
+                                // Select the first commit by default if available
+                                if (ticketInfo.commits.isNotEmpty()) {
+                                    SwingUtilities.invokeLater {
+                                        if (authorCommitsTable.rowCount > 0) {
+                                            try {
+                                                authorCommitsTable.setRowSelectionInterval(0, 0)
+                                                authorCommitsTable.scrollRectToVisible(authorCommitsTable.getCellRect(0, 0, true))
+                                                
+                                                // Manually update the changed files list for the first commit
+                                                val selectedCommit = ticketInfo.commits[0]
+                                                changedFilesListModel.clear()
+                                                if (selectedCommit.changedFiles.isNotEmpty()) {
+                                                    // Sort files by path, with test files first
+                                                    val sortedFiles = selectedCommit.changedFiles.sortedWith(
+                                                        compareByDescending<ChangedFileInfo> { it.isTestFile }
+                                                        .thenBy { it.path.lowercase() }
+                                                    )
+                                                    sortedFiles.forEach { changedFilesListModel.addElement(it) }
+                                                    changedFilesLabel.text = "${CommitTracerBundle.message("dialog.changed.files")} (${selectedCommit.changedFiles.size})"
+                                                } else {
+                                                    changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
+                                                }
+                                            } catch (e: Exception) {
+                                                // Log any error but continue
+                                                println("Error selecting first ticket commit: ${e.message}")
+                                            }
+                                        }
+                                    }
+                                }
                                 
                                 // Configure columns
                                 authorCommitsTable.columnModel.getColumn(4).preferredWidth = 50  // Tests
