@@ -23,6 +23,8 @@ import java.awt.FlowLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.awt.event.ActionEvent
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Pattern
@@ -367,7 +369,12 @@ class CommitListDialog(
             columnModel.getColumn(3).cellRenderer = centerRenderer // Blockers Count
             columnModel.getColumn(4).cellRenderer = centerRenderer // Regressions Count
             columnModel.getColumn(7).cellRenderer = centerRenderer // Active Days
-            columnModel.getColumn(8).cellRenderer = centerRenderer // Commits/Day
+            
+            // Create special renderer for commits/day with 2 decimal places
+            val commitsPerDayRenderer = DefaultTableCellRenderer().apply {
+                horizontalAlignment = SwingConstants.CENTER
+            }
+            columnModel.getColumn(8).cellRenderer = commitsPerDayRenderer // Commits/Day
             
             // Add date renderer for date columns to ensure consistent display
             val dateRenderer = DefaultTableCellRenderer()
@@ -384,13 +391,14 @@ class CommitListDialog(
             sorter.setComparator(3, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
             sorter.setComparator(4, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
             sorter.setComparator(7, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
             sorter.setComparator(8, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
                     else -> 0.0
                 }
-            }) // Commits/Day
+            })
             
             // Sort by commit count (descending) by default
             sorter.toggleSortOrder(1)
@@ -614,6 +622,7 @@ class CommitListDialog(
         
         // Use Locale.US for consistent date formatting
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        private val commitsDayFormat = DecimalFormat("0.00", DecimalFormatSymbols(Locale.US))
         
         fun updateData(newAuthors: List<AuthorStats>) {
             authors = newAuthors
@@ -646,7 +655,11 @@ class CommitListDialog(
                 5 -> dateFormat.format(author.firstCommitDate)
                 6 -> dateFormat.format(author.lastCommitDate)
                 7 -> author.getActiveDays()
-                8 -> author.getCommitsPerDay()  // Return actual double value, not formatted string
+                8 -> {
+                    val commitsPerDay = author.getCommitsPerDay()
+                    // Format for display while maintaining the Double type for sorting
+                    commitsDayFormat.format(commitsPerDay).toDouble()
+                }
                 else -> ""
             }
         }
