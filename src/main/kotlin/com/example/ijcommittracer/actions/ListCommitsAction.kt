@@ -26,7 +26,6 @@ import java.util.concurrent.TimeUnit
  */
 class ListCommitsAction : AnAction(), DumbAware {
 
-
     private lateinit var project: Project
 
     override fun actionPerformed(e: AnActionEvent) {
@@ -123,8 +122,6 @@ class ListCommitsAction : AnAction(), DumbAware {
             }
         })
     }
-
-
 
     companion object {
         // Pattern for YouTrack ticket references

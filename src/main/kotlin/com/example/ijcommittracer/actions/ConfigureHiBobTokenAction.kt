@@ -3,21 +3,24 @@ package com.example.ijcommittracer.actions
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.HiBobApiService
 import com.example.ijcommittracer.services.NotificationService
+import com.example.ijcommittracer.services.TokenStorageService
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
+import com.intellij.ui.dsl.builder.panel
+import com.intellij.ui.dsl.builder.columns
 import com.intellij.util.ui.JBUI
-import java.awt.BorderLayout
+import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.Dimension
-import javax.swing.Action
 import javax.swing.JComponent
-import javax.swing.JPanel
+import javax.swing.JPasswordField
 
 /**
  * Action to configure HiBob API token.
+ * Uses IntelliJ UI DSL for improved layout and secure password field.
  */
 class ConfigureHiBobTokenAction : AnAction() {
 
@@ -30,7 +33,12 @@ class ConfigureHiBobTokenAction : AnAction() {
             val baseUrl = dialog.getBaseUrl()
             
             if (token.isNotBlank()) {
-                // Store the token in the service
+                // Store the token securely in the TokenStorageService
+                val tokenStorage = TokenStorageService.getInstance(project)
+                tokenStorage.setHiBobToken(token)
+                tokenStorage.setHiBobBaseUrl(baseUrl)
+                
+                // Also update HiBobApiService for immediate use
                 val hibobService = HiBobApiService.getInstance(project)
                 hibobService.setApiCredentials(token, baseUrl)
                 
@@ -45,50 +53,47 @@ class ConfigureHiBobTokenAction : AnAction() {
     
     /**
      * Dialog to enter HiBob API token.
+     * Uses IntelliJ UI DSL and secure password field.
      */
     private class HiBobTokenDialog(project: Project) : DialogWrapper(project) {
-        private val tokenField = JBTextField()
-        private val baseUrlField = JBTextField("https://api.hibob.com/v1")
+        private val tokenField = JPasswordField()
+        private val baseUrlField = JBTextField()
         
         init {
             title = "Configure HiBob API"
+            
+            // Pre-populate the base URL if available
+            val tokenStorage = TokenStorageService.getInstance(project)
+            baseUrlField.text = tokenStorage.getHiBobBaseUrl()
+            
             init()
         }
         
         override fun createCenterPanel(): JComponent {
-            val panel = JPanel(BorderLayout())
-            panel.preferredSize = Dimension(400, 150)
+            val mainPanel = BorderLayoutPanel()
+            mainPanel.preferredSize = Dimension(450, 150)
             
-            val fieldsPanel = JPanel(BorderLayout()).apply {
-                border = JBUI.Borders.empty(10)
+            val formPanel = panel {
+                row("HiBob API Token:") {
+                    cell(tokenField)
+                        .columns(30)
+                        .comment("Securely stored in IntelliJ credential store")
+                }
+                row("API Base URL:") {
+                    cell(baseUrlField)
+                        .columns(30)
+                        .comment("Default: https://api.hibob.com/v1")
+                }
             }
             
-            // Token field
-            val tokenLabel = JBLabel("HiBob API Token:")
-            tokenLabel.border = JBUI.Borders.emptyBottom(5)
-            fieldsPanel.add(tokenLabel, BorderLayout.NORTH)
-            tokenField.preferredSize = Dimension(tokenField.preferredSize.width, 35)
-            fieldsPanel.add(tokenField, BorderLayout.CENTER)
+            mainPanel.addToCenter(formPanel)
+            mainPanel.border = JBUI.Borders.empty(10)
             
-            // Base URL field
-            val baseUrlPanel = JPanel(BorderLayout()).apply {
-                border = JBUI.Borders.emptyTop(10)
-            }
-            val baseUrlLabel = JBLabel("API Base URL (optional):")
-            baseUrlLabel.border = JBUI.Borders.emptyBottom(5)
-            baseUrlPanel.add(baseUrlLabel, BorderLayout.NORTH)
-            baseUrlField.preferredSize = Dimension(baseUrlField.preferredSize.width, 35)
-            baseUrlPanel.add(baseUrlField, BorderLayout.CENTER)
-            
-            fieldsPanel.add(baseUrlPanel, BorderLayout.SOUTH)
-            
-            panel.add(fieldsPanel, BorderLayout.CENTER)
-            
-            return panel
+            return mainPanel
         }
         
-        fun getToken(): String = tokenField.text
+        fun getToken(): String = String(tokenField.password)
         
-        fun getBaseUrl(): String = baseUrlField.text
+        fun getBaseUrl(): String = baseUrlField.text.ifBlank { "https://api.hibob.com/v1" }
     }
 }

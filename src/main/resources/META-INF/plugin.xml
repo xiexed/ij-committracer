@@ -36,6 +36,12 @@
                            displayType="BALLOON" 
                            toolWindowId="VCS" 
                            isLogByDefault="true"/>
+                           
+        <!-- Register services -->
+        <projectService serviceImplementation="com.example.ijcommittracer.services.TokenStorageService"/>
+        <projectService serviceImplementation="com.example.ijcommittracer.services.HiBobApiService"/>
+        <projectService serviceImplementation="com.example.ijcommittracer.services.YouTrackApiService"/>
+        <projectService serviceImplementation="com.example.ijcommittracer.services.NotificationService"/>
     </extensions>
     
     <actions>

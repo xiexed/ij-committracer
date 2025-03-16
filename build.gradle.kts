@@ -30,6 +30,11 @@ dependencies {
     
     // Add OkHttp dependency for HiBob API
     implementation("com.squareup.okhttp3:okhttp:4.11.0")
+    
+    // Add Kotlin coroutines for async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
 }
 
 intellijPlatform {
