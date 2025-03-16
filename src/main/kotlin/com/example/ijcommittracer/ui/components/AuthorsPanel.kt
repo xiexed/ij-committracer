@@ -74,32 +74,63 @@ class AuthorsPanel(
         add(filterPanel, BorderLayout.NORTH)
         
         // Create table with author statistics
-        val tableModel = AuthorTableModel(authorStats.values.toList())
+        val authorList = authorStats.values.toList()
+        val tableModel = AuthorTableModel(authorList)
+        
+        // Check if we have any non-empty team information
+        val hasHiBobInfo = authorList.any { 
+            it.teamName.isNotBlank() || it.displayName.isNotBlank() || it.title.isNotBlank() 
+        }
+        
         authorsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+            
+            // Set column widths
             columnModel.getColumn(0).preferredWidth = 200 // Author (email)
-            columnModel.getColumn(1).preferredWidth = 150 // Name
-            columnModel.getColumn(2).preferredWidth = 120 // Team
-            columnModel.getColumn(3).preferredWidth = 150 // Title
-            columnModel.getColumn(4).preferredWidth = 80  // Commit Count
-            columnModel.getColumn(5).preferredWidth = 80  // Tickets Count
-            columnModel.getColumn(6).preferredWidth = 80  // Blockers Count
-            columnModel.getColumn(7).preferredWidth = 80  // Regressions Count
-            columnModel.getColumn(8).preferredWidth = 80  // Test Commits Count
-            columnModel.getColumn(9).preferredWidth = 80  // Test Coverage %
-            columnModel.getColumn(10).preferredWidth = 150 // First Commit
-            columnModel.getColumn(11).preferredWidth = 150 // Last Commit
-            columnModel.getColumn(12).preferredWidth = 80  // Active Days
-            columnModel.getColumn(13).preferredWidth = 120 // Commits/Day
+            
+            // Only show these columns if we have HiBob information
+            if (hasHiBobInfo) {
+                columnModel.getColumn(1).preferredWidth = 150 // Name
+                columnModel.getColumn(2).preferredWidth = 120 // Team
+                columnModel.getColumn(3).preferredWidth = 150 // Title
+            } else {
+                // Hide name, team, title columns if no HiBob info
+                tableColumnModel.removeColumn(columnModel.getColumn(3)) // Remove Title
+                tableColumnModel.removeColumn(columnModel.getColumn(2)) // Remove Team
+                tableColumnModel.removeColumn(columnModel.getColumn(1)) // Remove Name
+            }
+            
+            // Set column widths - need to adjust indices if HiBob columns are hidden
+            val commitCountCol = if (hasHiBobInfo) 4 else 1
+            val ticketsCountCol = if (hasHiBobInfo) 5 else 2
+            val blockersCountCol = if (hasHiBobInfo) 6 else 3
+            val regressionsCountCol = if (hasHiBobInfo) 7 else 4
+            val testCommitsCountCol = if (hasHiBobInfo) 8 else 5
+            val testCoverageCol = if (hasHiBobInfo) 9 else 6
+            val firstCommitCol = if (hasHiBobInfo) 10 else 7
+            val lastCommitCol = if (hasHiBobInfo) 11 else 8
+            val activeDaysCol = if (hasHiBobInfo) 12 else 9
+            val commitsPerDayCol = if (hasHiBobInfo) 13 else 10
+            
+            columnModel.getColumn(commitCountCol).preferredWidth = 80  // Commit Count
+            columnModel.getColumn(ticketsCountCol).preferredWidth = 80  // Tickets Count
+            columnModel.getColumn(blockersCountCol).preferredWidth = 80  // Blockers Count
+            columnModel.getColumn(regressionsCountCol).preferredWidth = 80  // Regressions Count
+            columnModel.getColumn(testCommitsCountCol).preferredWidth = 80  // Test Commits Count
+            columnModel.getColumn(testCoverageCol).preferredWidth = 80  // Test Coverage %
+            columnModel.getColumn(firstCommitCol).preferredWidth = 150 // First Commit
+            columnModel.getColumn(lastCommitCol).preferredWidth = 150 // Last Commit
+            columnModel.getColumn(activeDaysCol).preferredWidth = 80  // Active Days
+            columnModel.getColumn(commitsPerDayCol).preferredWidth = 120 // Commits/Day
             
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
             centerRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(4).cellRenderer = centerRenderer // Commit Count
-            columnModel.getColumn(5).cellRenderer = centerRenderer // Tickets Count
-            columnModel.getColumn(6).cellRenderer = centerRenderer // Blockers Count
-            columnModel.getColumn(7).cellRenderer = centerRenderer // Regressions Count
-            columnModel.getColumn(8).cellRenderer = centerRenderer // Test Commits Count
+            columnModel.getColumn(commitCountCol).cellRenderer = centerRenderer // Commit Count
+            columnModel.getColumn(ticketsCountCol).cellRenderer = centerRenderer // Tickets Count
+            columnModel.getColumn(blockersCountCol).cellRenderer = centerRenderer // Blockers Count
+            columnModel.getColumn(regressionsCountCol).cellRenderer = centerRenderer // Regressions Count
+            columnModel.getColumn(testCommitsCountCol).cellRenderer = centerRenderer // Test Commits Count
             
             // Create a custom renderer for the Test Coverage % column with color-coding
             val testCoverageRenderer = object : DefaultTableCellRenderer() {
@@ -128,49 +159,43 @@ class AuthorsPanel(
                     return label
                 }
             }
-            columnModel.getColumn(9).cellRenderer = testCoverageRenderer // Test Coverage %
+            columnModel.getColumn(testCoverageCol).cellRenderer = testCoverageRenderer // Test Coverage %
             
-            columnModel.getColumn(12).cellRenderer = centerRenderer // Active Days
+            columnModel.getColumn(activeDaysCol).cellRenderer = centerRenderer // Active Days
             
             // Create special renderer for commits/day with 2 decimal places
             val commitsPerDayRenderer = DefaultTableCellRenderer().apply {
                 horizontalAlignment = SwingConstants.CENTER
             }
-            columnModel.getColumn(13).cellRenderer = commitsPerDayRenderer // Commits/Day
+            columnModel.getColumn(commitsPerDayCol).cellRenderer = commitsPerDayRenderer // Commits/Day
             
             // Add date renderer for date columns to ensure consistent display
             val dateRenderer = DefaultTableCellRenderer()
             dateRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(10).cellRenderer = dateRenderer // First Commit
-            columnModel.getColumn(11).cellRenderer = dateRenderer // Last Commit
+            columnModel.getColumn(firstCommitCol).cellRenderer = dateRenderer // First Commit
+            columnModel.getColumn(lastCommitCol).cellRenderer = dateRenderer // Last Commit
             
-            // Add team renderer with distinctive background
-            val teamRenderer = DefaultTableCellRenderer().apply {
-                horizontalAlignment = SwingConstants.LEFT
-                background = JBColor(0xE8F4FE, 0x2D3A41)  // Light blue in light theme, dark blue in dark theme
+            // Add team renderer with distinctive background, but only if HiBob info is available
+            if (hasHiBobInfo) {
+                val teamRenderer = DefaultTableCellRenderer().apply {
+                    horizontalAlignment = SwingConstants.LEFT
+                    background = JBColor(0xE8F4FE, 0x2D3A41)  // Light blue in light theme, dark blue in dark theme
+                }
+                columnModel.getColumn(2).cellRenderer = teamRenderer // Team
             }
-            columnModel.getColumn(2).cellRenderer = teamRenderer // Team
             
             // Add row sorter for sorting with appropriate comparators
             val sorter = TableRowSorter(tableModel)
             
             // Make sure numeric columns are sorted as numbers
-            sorter.setComparator(4, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
-            sorter.setComparator(5, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
-            sorter.setComparator(6, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
-            sorter.setComparator(7, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
-            sorter.setComparator(8, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
+            sorter.setComparator(commitCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
+            sorter.setComparator(ticketsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
+            sorter.setComparator(blockersCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
+            sorter.setComparator(regressionsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
+            sorter.setComparator(testCommitsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
+            
             // Test coverage % - use numeric value for sorting
-            sorter.setComparator(9, Comparator.comparingDouble<Any> {
-                when (it) {
-                    is Number -> it.toDouble()
-                    is String -> it.toDoubleOrNull() ?: 0.0
-                    else -> 0.0
-                }
-            })
-            sorter.setComparator(12, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
-            // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
-            sorter.setComparator(13, Comparator.comparingDouble<Any> {
+            sorter.setComparator(testCoverageCol, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
@@ -178,12 +203,25 @@ class AuthorsPanel(
                 }
             })
             
-            // Team comparator
-            sorter.setComparator(2, Comparator.comparing(String::toString, String.CASE_INSENSITIVE_ORDER))
+            sorter.setComparator(activeDaysCol, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            
+            // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
+            sorter.setComparator(commitsPerDayCol, Comparator.comparingDouble<Any> {
+                when (it) {
+                    is Number -> it.toDouble()
+                    is String -> it.toDoubleOrNull() ?: 0.0
+                    else -> 0.0
+                }
+            })
+            
+            // Team comparator - only if HiBob info is available
+            if (hasHiBobInfo) {
+                sorter.setComparator(2, Comparator.comparing(String::toString, String.CASE_INSENSITIVE_ORDER))
+            }
             
             // Sort by commit count (descending) by default
-            sorter.toggleSortOrder(4)
-            sorter.toggleSortOrder(4) // Toggle twice to get descending order
+            sorter.toggleSortOrder(commitCountCol)
+            sorter.toggleSortOrder(commitCountCol) // Toggle twice to get descending order
             
             rowSorter = sorter
             
