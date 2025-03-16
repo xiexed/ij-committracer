@@ -95,9 +95,9 @@ class AuthorsPanel(
                 columnModel.getColumn(3).preferredWidth = 150 // Title
             } else {
                 // Hide name, team, title columns if no HiBob info
-                tableColumnModel.removeColumn(columnModel.getColumn(3)) // Remove Title
-                tableColumnModel.removeColumn(columnModel.getColumn(2)) // Remove Team
-                tableColumnModel.removeColumn(columnModel.getColumn(1)) // Remove Name
+                columnModel.removeColumn(columnModel.getColumn(3)) // Remove Title
+                columnModel.removeColumn(columnModel.getColumn(2)) // Remove Team
+                columnModel.removeColumn(columnModel.getColumn(1)) // Remove Name
             }
             
             // Set column widths - need to adjust indices if HiBob columns are hidden
