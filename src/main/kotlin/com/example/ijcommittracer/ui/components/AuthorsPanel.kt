@@ -77,26 +77,29 @@ class AuthorsPanel(
         val tableModel = AuthorTableModel(authorStats.values.toList())
         authorsTable = JBTable(tableModel).apply {
             setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-            columnModel.getColumn(0).preferredWidth = 200 // Author
-            columnModel.getColumn(1).preferredWidth = 80  // Commit Count
-            columnModel.getColumn(2).preferredWidth = 80  // Tickets Count
-            columnModel.getColumn(3).preferredWidth = 80  // Blockers Count
-            columnModel.getColumn(4).preferredWidth = 80  // Regressions Count
-            columnModel.getColumn(5).preferredWidth = 80  // Test Commits Count
-            columnModel.getColumn(6).preferredWidth = 80  // Test Coverage %
-            columnModel.getColumn(7).preferredWidth = 150 // First Commit
-            columnModel.getColumn(8).preferredWidth = 150 // Last Commit
-            columnModel.getColumn(9).preferredWidth = 80  // Active Days
-            columnModel.getColumn(10).preferredWidth = 120 // Commits/Day
+            columnModel.getColumn(0).preferredWidth = 200 // Author (email)
+            columnModel.getColumn(1).preferredWidth = 150 // Name
+            columnModel.getColumn(2).preferredWidth = 120 // Team
+            columnModel.getColumn(3).preferredWidth = 150 // Title
+            columnModel.getColumn(4).preferredWidth = 80  // Commit Count
+            columnModel.getColumn(5).preferredWidth = 80  // Tickets Count
+            columnModel.getColumn(6).preferredWidth = 80  // Blockers Count
+            columnModel.getColumn(7).preferredWidth = 80  // Regressions Count
+            columnModel.getColumn(8).preferredWidth = 80  // Test Commits Count
+            columnModel.getColumn(9).preferredWidth = 80  // Test Coverage %
+            columnModel.getColumn(10).preferredWidth = 150 // First Commit
+            columnModel.getColumn(11).preferredWidth = 150 // Last Commit
+            columnModel.getColumn(12).preferredWidth = 80  // Active Days
+            columnModel.getColumn(13).preferredWidth = 120 // Commits/Day
             
             // Center-align numeric columns
             val centerRenderer = DefaultTableCellRenderer()
             centerRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(1).cellRenderer = centerRenderer // Commit Count
-            columnModel.getColumn(2).cellRenderer = centerRenderer // Tickets Count
-            columnModel.getColumn(3).cellRenderer = centerRenderer // Blockers Count
-            columnModel.getColumn(4).cellRenderer = centerRenderer // Regressions Count
-            columnModel.getColumn(5).cellRenderer = centerRenderer // Test Commits Count
+            columnModel.getColumn(4).cellRenderer = centerRenderer // Commit Count
+            columnModel.getColumn(5).cellRenderer = centerRenderer // Tickets Count
+            columnModel.getColumn(6).cellRenderer = centerRenderer // Blockers Count
+            columnModel.getColumn(7).cellRenderer = centerRenderer // Regressions Count
+            columnModel.getColumn(8).cellRenderer = centerRenderer // Test Commits Count
             
             // Create a custom renderer for the Test Coverage % column with color-coding
             val testCoverageRenderer = object : DefaultTableCellRenderer() {
@@ -125,42 +128,49 @@ class AuthorsPanel(
                     return label
                 }
             }
-            columnModel.getColumn(6).cellRenderer = testCoverageRenderer // Test Coverage %
+            columnModel.getColumn(9).cellRenderer = testCoverageRenderer // Test Coverage %
             
-            columnModel.getColumn(9).cellRenderer = centerRenderer // Active Days
+            columnModel.getColumn(12).cellRenderer = centerRenderer // Active Days
             
             // Create special renderer for commits/day with 2 decimal places
             val commitsPerDayRenderer = DefaultTableCellRenderer().apply {
                 horizontalAlignment = SwingConstants.CENTER
             }
-            columnModel.getColumn(10).cellRenderer = commitsPerDayRenderer // Commits/Day
+            columnModel.getColumn(13).cellRenderer = commitsPerDayRenderer // Commits/Day
             
             // Add date renderer for date columns to ensure consistent display
             val dateRenderer = DefaultTableCellRenderer()
             dateRenderer.horizontalAlignment = SwingConstants.CENTER
-            columnModel.getColumn(7).cellRenderer = dateRenderer // First Commit
-            columnModel.getColumn(8).cellRenderer = dateRenderer // Last Commit
+            columnModel.getColumn(10).cellRenderer = dateRenderer // First Commit
+            columnModel.getColumn(11).cellRenderer = dateRenderer // Last Commit
+            
+            // Add team renderer with distinctive background
+            val teamRenderer = DefaultTableCellRenderer().apply {
+                horizontalAlignment = SwingConstants.LEFT
+                background = JBColor(0xE8F4FE, 0x2D3A41)  // Light blue in light theme, dark blue in dark theme
+            }
+            columnModel.getColumn(2).cellRenderer = teamRenderer // Team
             
             // Add row sorter for sorting with appropriate comparators
             val sorter = TableRowSorter(tableModel)
             
             // Make sure numeric columns are sorted as numbers
-            sorter.setComparator(1, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
-            sorter.setComparator(2, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
-            sorter.setComparator(3, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
-            sorter.setComparator(4, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
-            sorter.setComparator(5, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
+            sorter.setComparator(4, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
+            sorter.setComparator(5, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
+            sorter.setComparator(6, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
+            sorter.setComparator(7, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
+            sorter.setComparator(8, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
             // Test coverage % - use numeric value for sorting
-            sorter.setComparator(6, Comparator.comparingDouble<Any> {
+            sorter.setComparator(9, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
                     else -> 0.0
                 }
             })
-            sorter.setComparator(9, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            sorter.setComparator(12, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
             // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
-            sorter.setComparator(10, Comparator.comparingDouble<Any> {
+            sorter.setComparator(13, Comparator.comparingDouble<Any> {
                 when (it) {
                     is Number -> it.toDouble()
                     is String -> it.toDoubleOrNull() ?: 0.0
@@ -168,9 +178,12 @@ class AuthorsPanel(
                 }
             })
             
+            // Team comparator
+            sorter.setComparator(2, Comparator.comparing(String::toString, String.CASE_INSENSITIVE_ORDER))
+            
             // Sort by commit count (descending) by default
-            sorter.toggleSortOrder(1)
-            sorter.toggleSortOrder(1) // Toggle twice to get descending order
+            sorter.toggleSortOrder(4)
+            sorter.toggleSortOrder(4) // Toggle twice to get descending order
             
             rowSorter = sorter
             

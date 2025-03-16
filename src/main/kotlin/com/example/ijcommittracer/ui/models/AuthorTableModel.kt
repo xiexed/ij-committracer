@@ -14,6 +14,9 @@ import javax.swing.table.AbstractTableModel
 class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableModel() {
     private val columns = arrayOf(
         CommitTracerBundle.message("dialog.column.author"),
+        "Name",
+        "Team",
+        "Title",
         CommitTracerBundle.message("dialog.column.author.commits"),
         CommitTracerBundle.message("dialog.column.author.tickets"),
         "Blockers",
@@ -43,9 +46,9 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
     
     override fun getColumnClass(columnIndex: Int): Class<*> {
         return when (columnIndex) {
-            1, 2, 3, 4, 5 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count
-            6, 10 -> Double::class.java  // Test % and Commits/Day
-            9 -> Long::class.java     // Active Days
+            4, 5, 6, 7, 8 -> Integer::class.java  // Commits, Tickets, Blockers, Regressions, Test Commits Count
+            9, 13 -> Double::class.java  // Test % and Commits/Day
+            12 -> Long::class.java     // Active Days
             else -> String::class.java
         }
     }
@@ -54,19 +57,22 @@ class AuthorTableModel(private var authors: List<AuthorStats>) : AbstractTableMo
         val author = authors[rowIndex]
         return when (columnIndex) {
             0 -> author.author
-            1 -> author.commitCount
-            2 -> author.youTrackTickets.size
-            3 -> author.getBlockerCount()
-            4 -> author.getRegressionCount()
-            5 -> author.testTouchedCount
-            6 -> {
+            1 -> author.displayName.ifBlank { "Unknown" }
+            2 -> author.teamName.ifBlank { "Unknown" }
+            3 -> author.title.ifBlank { "Unknown" }
+            4 -> author.commitCount
+            5 -> author.youTrackTickets.size
+            6 -> author.getBlockerCount()
+            7 -> author.getRegressionCount()
+            8 -> author.testTouchedCount
+            9 -> {
                 val testPercentage = author.getTestCoveragePercentage()
                 commitsDayFormat.format(testPercentage).toDouble()
             }
-            7 -> dateFormat.format(author.firstCommitDate)
-            8 -> dateFormat.format(author.lastCommitDate)
-            9 -> author.getActiveDays()
-            10 -> {
+            10 -> dateFormat.format(author.firstCommitDate)
+            11 -> dateFormat.format(author.lastCommitDate)
+            12 -> author.getActiveDays()
+            13 -> {
                 val commitsPerDay = author.getCommitsPerDay()
                 // Format for display while maintaining the Double type for sorting
                 commitsDayFormat.format(commitsPerDay).toDouble()

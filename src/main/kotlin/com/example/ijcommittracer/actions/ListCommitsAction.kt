@@ -145,12 +145,17 @@ class ListCommitsAction : AnAction(), DumbAware {
     private fun aggregateByAuthor(commits: List<CommitInfo>): Map<String, AuthorStats> {
         val project = this.project
         val authorMap = mutableMapOf<String, AuthorStats>()
+        val hibobService = project.getService(com.example.ijcommittracer.services.HiBobApiService::class.java)
 
         commits.forEach { commit ->
             val author = commit.author
             val tickets = extractYouTrackTickets(commit.message)
 
+            // Get existing stats or create new ones
             val stats = authorMap.getOrPut(author) {
+                // Get employee info from HiBob
+                val employeeInfo = hibobService.getEmployeeByEmail(author)
+                
                 AuthorStats(
                     author = author,
                     commitCount = 0,
@@ -158,7 +163,10 @@ class ListCommitsAction : AnAction(), DumbAware {
                     lastCommitDate = commit.dateObj,
                     youTrackTickets = mutableMapOf(),
                     blockerTickets = mutableMapOf(),
-                    regressionTickets = mutableMapOf()
+                    regressionTickets = mutableMapOf(),
+                    teamName = employeeInfo?.team ?: "",
+                    displayName = employeeInfo?.name ?: "",
+                    title = employeeInfo?.title ?: ""
                 )
             }
 
@@ -391,7 +399,10 @@ class ListCommitsAction : AnAction(), DumbAware {
         val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
         val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
         val regressionTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
-        val testTouchedCount: Int = 0
+        val testTouchedCount: Int = 0,
+        val teamName: String = "",
+        val displayName: String = "",
+        val title: String = ""
     ) {
         /**
          * Get active days between first and last commit.

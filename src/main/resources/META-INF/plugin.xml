@@ -66,6 +66,22 @@
                     description="Remove stored YouTrack API token"
                     icon="/icons/youtrack.svg">
             </action>
+            
+            <!-- Add separator before HiBob actions -->
+            <separator/>
+            
+            <!-- Add HiBob token configuration actions -->
+            <action id="IjCommitTracer.ConfigureHiBobToken" 
+                    class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
+                    text="Configure HiBob API" 
+                    description="Set or update HiBob API access token">
+            </action>
+            
+            <action id="IjCommitTracer.ClearHiBobToken" 
+                    class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
+                    text="Clear HiBob API Token" 
+                    description="Remove stored HiBob API token">
+            </action>
         </group>
         
         <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
@@ -93,6 +109,22 @@
                     text="Clear YouTrack Token" 
                     description="Remove stored YouTrack API token"
                     icon="/icons/youtrack.svg">
+            </action>
+            
+            <!-- Add separator before HiBob actions -->
+            <separator/>
+            
+            <!-- Add HiBob token configuration actions -->
+            <action id="IjCommitTracer.ConfigureHiBobTokenVcs" 
+                    class="com.example.ijcommittracer.actions.ConfigureHiBobTokenAction" 
+                    text="Configure HiBob API" 
+                    description="Set or update HiBob API access token">
+            </action>
+            
+            <action id="IjCommitTracer.ClearHiBobTokenVcs" 
+                    class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
+                    text="Clear HiBob API Token" 
+                    description="Remove stored HiBob API token">
             </action>
         </group>
         

@@ -27,6 +27,9 @@ dependencies {
 
     // Add JSON dependency for YouTrack API
     implementation("org.json:json:20240205")
+    
+    // Add OkHttp dependency for HiBob API
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
 }
 
 intellijPlatform {
