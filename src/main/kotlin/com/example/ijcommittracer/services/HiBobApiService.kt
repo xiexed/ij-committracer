@@ -60,7 +60,7 @@ class HiBobApiService(private val project: Project) {
         }
         
         // Try to get token from .env file first
-        val envToken = EnvFileReader.getProperty(HIBOB_API_TOKEN_KEY)
+        val envToken = EnvFileReader.getInstance(project).getProperty(HIBOB_API_TOKEN_KEY)
         val token = if (!envToken.isNullOrBlank()) {
             LOG.info("Using HiBob API token from .env file")
             envToken
@@ -107,7 +107,7 @@ class HiBobApiService(private val project: Project) {
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
         // Try to get base URL from .env file first
-        val baseUrl = EnvFileReader.getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
+        val baseUrl = EnvFileReader.getInstance(project).getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
         
         val request = Request.Builder()
             .url("$baseUrl/people?email=$email")

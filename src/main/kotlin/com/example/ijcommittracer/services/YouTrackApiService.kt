@@ -28,12 +28,16 @@ class YouTrackApiService(private val project: Project) {
     private val YOUTRACK_API_URL_KEY = "YOUTRACK_API_URL"
     
     // Get base URL from .env file or use default from bundle
-    private val youtrackUrl = EnvFileReader.getProperty(
-        YOUTRACK_API_URL_KEY, 
-        CommitTracerBundle.message("youtrack.api.url")
-    )
-    private val apiBaseUrl = "$youtrackUrl/api"
-    private val issueApiUrl = "$apiBaseUrl/issues"
+    private val youtrackUrl by lazy { 
+        EnvFileReader.getInstance(project).getProperty(
+            YOUTRACK_API_URL_KEY, 
+            CommitTracerBundle.message("youtrack.api.url")
+        )
+    }
+    
+    // Make these lazy too to ensure they're initialized after youtrackUrl
+    private val apiBaseUrl by lazy { "$youtrackUrl/api" }
+    private val issueApiUrl by lazy { "$apiBaseUrl/issues" }
     private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
     
     // Cache to avoid repeated API calls for the same ticket
@@ -190,7 +194,7 @@ class YouTrackApiService(private val project: Project) {
      */
     private fun getStoredToken(): String? {
         // Try to get token from .env file first
-        val envToken = EnvFileReader.getProperty(YOUTRACK_API_TOKEN_KEY)
+        val envToken = EnvFileReader.getInstance(project).getProperty(YOUTRACK_API_TOKEN_KEY)
         if (!envToken.isNullOrBlank()) {
             logger.info("Using YouTrack API token from .env file")
             return envToken
