@@ -1,5 +1,6 @@
 package com.example.ijcommittracer.services
 
+import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
@@ -21,6 +22,11 @@ import java.util.concurrent.TimeUnit
  */
 @Service(Service.Level.PROJECT)
 class HiBobApiService(private val project: Project) {
+    
+    // Constants for .env file properties
+    private val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
+    private val HIBOB_API_URL_KEY = "HIBOB_API_URL"
+    private val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
     
     private val cache = ConcurrentHashMap<String, CachedEmployeeInfo>()
     private val client = OkHttpClient.Builder()
@@ -53,14 +59,22 @@ class HiBobApiService(private val project: Project) {
             }
         }
         
-        // If not in cache or expired, fetch from API
-        val token = tokenStorage.getHiBobToken() ?: return null
+        // Try to get token from .env file first
+        val envToken = EnvFileReader.getProperty(HIBOB_API_TOKEN_KEY)
+        val token = if (!envToken.isNullOrBlank()) {
+            LOG.info("Using HiBob API token from .env file")
+            envToken
+        } else {
+            // Fall back to tokenStorage
+            tokenStorage.getHiBobToken() ?: return null
+        }
+        
         if (token.isBlank()) {
             return null
         }
         
         return try {
-            fetchEmployeeFromApi(email)?.also { employeeInfo ->
+            fetchEmployeeFromApi(email, token)?.also { employeeInfo ->
                 // Store in cache with timestamp
                 cache[email] = CachedEmployeeInfo(
                     info = employeeInfo,
@@ -91,9 +105,9 @@ class HiBobApiService(private val project: Project) {
     /**
      * Fetch employee information from HiBob API.
      */
-    private fun fetchEmployeeFromApi(email: String): EmployeeInfo? {
-        val baseUrl = tokenStorage.getHiBobBaseUrl()
-        val token = tokenStorage.getHiBobToken() ?: return null
+    private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
+        // Try to get base URL from .env file first
+        val baseUrl = EnvFileReader.getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
         
         val request = Request.Builder()
             .url("$baseUrl/people?email=$email")

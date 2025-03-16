@@ -1,6 +1,7 @@
 package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.CommitTracerBundle
+import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.credentialStore.Credentials
 import com.intellij.credentialStore.generateServiceName
@@ -22,7 +23,15 @@ import java.net.HttpURLConnection
 class YouTrackApiService(private val project: Project) {
     private val logger = Logger.getInstance(YouTrackApiService::class.java)
     
-    private val youtrackUrl = CommitTracerBundle.message("youtrack.api.url")
+    // Constants for .env file properties
+    private val YOUTRACK_API_TOKEN_KEY = "YOUTRACK_API_TOKEN"
+    private val YOUTRACK_API_URL_KEY = "YOUTRACK_API_URL"
+    
+    // Get base URL from .env file or use default from bundle
+    private val youtrackUrl = EnvFileReader.getProperty(
+        YOUTRACK_API_URL_KEY, 
+        CommitTracerBundle.message("youtrack.api.url")
+    )
     private val apiBaseUrl = "$youtrackUrl/api"
     private val issueApiUrl = "$apiBaseUrl/issues"
     private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
@@ -176,9 +185,18 @@ class YouTrackApiService(private val project: Project) {
     }
     
     /**
-     * Retrieves the YouTrack API token from password safe.
+     * Retrieves the YouTrack API token.
+     * First tries to get the token from .env file, then falls back to password safe.
      */
     private fun getStoredToken(): String? {
+        // Try to get token from .env file first
+        val envToken = EnvFileReader.getProperty(YOUTRACK_API_TOKEN_KEY)
+        if (!envToken.isNullOrBlank()) {
+            logger.info("Using YouTrack API token from .env file")
+            return envToken
+        }
+        
+        // Fall back to credential store
         val credentialAttributes = createCredentialAttributes()
         val credentials = PasswordSafe.instance.get(credentialAttributes)
         return credentials?.getPasswordAsString()

@@ -18,6 +18,10 @@ out/
 !**/src/test/**/out/
 .intellijPlatform/
 
+# Environment files with credentials
+.env
+.env.*
+
 ### Eclipse ###
 .apt_generated
 .classpath
