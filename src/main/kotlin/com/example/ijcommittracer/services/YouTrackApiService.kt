@@ -137,29 +137,42 @@ class YouTrackApiService(private val project: Project) {
             return null
         }
         
-        // Save the token for future use
-        storeToken(token)
+        // Return the token immediately but store it in the background
+        // to avoid blocking the UI thread
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            storeToken(token)
+        }
         
         return token
     }
     
     /**
      * Stores the provided token in the password safe.
+     * This method should be called from a background thread to avoid UI freezes.
      */
     fun storeToken(token: String) {
-        PasswordSafe.instance.set(
-            createCredentialAttributes(),
-            Credentials("YouTrack API Token", token)
-        )
-        logger.info("YouTrack API token stored successfully")
+        // Move token storage to a background thread
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            com.intellij.util.SlowOperations.assertSlowOperationsAreAllowed()
+            PasswordSafe.instance.set(
+                createCredentialAttributes(),
+                Credentials("YouTrack API Token", token)
+            )
+            logger.info("YouTrack API token stored successfully")
+        }
     }
     
     /**
      * Clears the stored token.
+     * This method should be called from a background thread to avoid UI freezes.
      */
     fun clearToken() {
-        PasswordSafe.instance.set(createCredentialAttributes(), null)
-        logger.info("YouTrack API token cleared")
+        // Move token clearing to a background thread
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            com.intellij.util.SlowOperations.assertSlowOperationsAreAllowed()
+            PasswordSafe.instance.set(createCredentialAttributes(), null)
+            logger.info("YouTrack API token cleared")
+        }
     }
     
     /**

@@ -12,6 +12,10 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.builder.columns
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import java.awt.Dimension
@@ -33,20 +37,25 @@ class ConfigureHiBobTokenAction : AnAction() {
             val baseUrl = dialog.getBaseUrl()
             
             if (token.isNotBlank()) {
-                // Store the token securely in the TokenStorageService
-                val tokenStorage = TokenStorageService.getInstance(project)
-                tokenStorage.setHiBobToken(token)
-                tokenStorage.setHiBobBaseUrl(baseUrl)
-                
-                // Also update HiBobApiService for immediate use
-                val hibobService = HiBobApiService.getInstance(project)
-                hibobService.setApiCredentials(token, baseUrl)
-                
-                NotificationService.showInfo(
-                    project,
-                    "HiBob API token configured successfully",
-                    "Commit Tracer"
-                )
+                // Store the token securely in the background
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    val tokenStorage = TokenStorageService.getInstance(project)
+                    tokenStorage.setHiBobToken(token)
+                    tokenStorage.setHiBobBaseUrl(baseUrl)
+                    
+                    // Also update HiBobApiService for immediate use
+                    val hibobService = HiBobApiService.getInstance(project)
+                    hibobService.setApiCredentials(token, baseUrl)
+                    
+                    // Switch to UI thread to show notification
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        NotificationService.showInfo(
+                            project,
+                            "HiBob API token configured successfully",
+                            "Commit Tracer"
+                        )
+                    }
+                }
             }
         }
     }

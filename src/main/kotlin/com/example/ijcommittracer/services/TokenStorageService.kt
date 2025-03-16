@@ -85,19 +85,28 @@ class TokenStorageService(private val project: Project) : PersistentStateCompone
     
     // Private helper methods for token storage using PasswordSafe
     private fun getStoredToken(key: String): String? {
+        // Reading passwords is generally fast, but we should still be careful about EDT
         val credentialAttributes = createCredentialAttributes(key)
         return PasswordSafe.instance.getPassword(credentialAttributes)
     }
     
     private fun storeToken(key: String, token: String) {
-        val credentialAttributes = createCredentialAttributes(key)
-        val credentials = Credentials("", token)
-        PasswordSafe.instance.set(credentialAttributes, credentials)
+        // Store tokens in a background thread to avoid UI freezes
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            val credentialAttributes = createCredentialAttributes(key)
+            val credentials = Credentials("", token)
+            com.intellij.util.SlowOperations.assertSlowOperationsAreAllowed()
+            PasswordSafe.instance.set(credentialAttributes, credentials)
+        }
     }
     
     private fun clearToken(key: String) {
-        val credentialAttributes = createCredentialAttributes(key)
-        PasswordSafe.instance.set(credentialAttributes, null)
+        // Clear tokens in a background thread to avoid UI freezes
+        com.intellij.openapi.application.ApplicationManager.getApplication().executeOnPooledThread {
+            val credentialAttributes = createCredentialAttributes(key)
+            com.intellij.util.SlowOperations.assertSlowOperationsAreAllowed()
+            PasswordSafe.instance.set(credentialAttributes, null)
+        }
     }
     
     private fun createCredentialAttributes(key: String): CredentialAttributes {
