@@ -187,12 +187,46 @@ class AuthorsPanel(
             // Add row sorter for sorting with appropriate comparators
             val sorter = TableRowSorter(tableModel)
             
-            // Make sure numeric columns are sorted as numbers
-            sorter.setComparator(commitCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Commits
-            sorter.setComparator(ticketsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Tickets Count
-            sorter.setComparator(blockersCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Blockers Count
-            sorter.setComparator(regressionsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Regressions Count
-            sorter.setComparator(testCommitsCountCol, Comparator.comparingInt<Any> { (it as Number).toInt() }) // Test Commits Count
+            // Make sure numeric columns are sorted as numbers - handle various data types safely
+            sorter.setComparator(commitCountCol, Comparator.comparingInt<Any> { 
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
+                }
+            }) // Commits
+            
+            sorter.setComparator(ticketsCountCol, Comparator.comparingInt<Any> { 
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
+                }
+            }) // Tickets Count
+            
+            sorter.setComparator(blockersCountCol, Comparator.comparingInt<Any> { 
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
+                }
+            }) // Blockers Count
+            
+            sorter.setComparator(regressionsCountCol, Comparator.comparingInt<Any> { 
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
+                }
+            }) // Regressions Count
+            
+            sorter.setComparator(testCommitsCountCol, Comparator.comparingInt<Any> { 
+                when (it) {
+                    is Number -> it.toInt()
+                    is String -> it.toString().toIntOrNull() ?: 0
+                    else -> 0
+                }
+            }) // Test Commits Count
             
             // Test coverage % - use numeric value for sorting
             sorter.setComparator(testCoverageCol, Comparator.comparingDouble<Any> {
@@ -203,7 +237,13 @@ class AuthorsPanel(
                 }
             })
             
-            sorter.setComparator(activeDaysCol, Comparator.comparingLong<Any> { (it as Number).toLong() }) // Active Days
+            sorter.setComparator(activeDaysCol, Comparator.comparingLong<Any> { 
+                when (it) {
+                    is Number -> it.toLong()
+                    is String -> it.toString().toLongOrNull() ?: 0L
+                    else -> 0L
+                }
+            }) // Active Days
             
             // Commits/Day - still use the numeric value for sorting (the formatted value is still a Double)
             sorter.setComparator(commitsPerDayCol, Comparator.comparingDouble<Any> {
@@ -560,9 +600,32 @@ class AuthorsPanel(
                     
                     // Add row sorter for tickets table
                     val ticketsSorter = TableRowSorter(ticketsModel)
-                    ticketsSorter.setComparator(1, Comparator.comparingInt<Any> { (it as Number).toInt() })
-                    ticketsSorter.setComparator(2, Comparator.comparing<Any, Boolean> { it as Boolean })
-                    ticketsSorter.setComparator(3, Comparator.comparing<Any, Boolean> { it as Boolean })
+                    
+                    // Safely handle different types for commit count
+                    ticketsSorter.setComparator(1, Comparator.comparingInt<Any> { 
+                        when (it) {
+                            is Number -> it.toInt()
+                            is String -> it.toString().toIntOrNull() ?: 0
+                            else -> 0
+                        }
+                    })
+                    
+                    // Safely handle different types for boolean columns
+                    ticketsSorter.setComparator(2, Comparator.comparing<Any, Boolean> { 
+                        when (it) {
+                            is Boolean -> it
+                            is String -> it.toString().equals("true", ignoreCase = true)
+                            else -> false
+                        }
+                    })
+                    
+                    ticketsSorter.setComparator(3, Comparator.comparing<Any, Boolean> { 
+                        when (it) {
+                            is Boolean -> it
+                            is String -> it.toString().equals("true", ignoreCase = true)
+                            else -> false
+                        }
+                    })
                     
                     // Sort by commit count (descending) by default
                     ticketsSorter.toggleSortOrder(1)
