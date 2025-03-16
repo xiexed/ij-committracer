@@ -28,6 +28,7 @@ import java.util.*
 import javax.swing.*
 import javax.swing.event.ChangeEvent
 import javax.swing.event.DocumentListener
+import javax.swing.event.ListSelectionListener
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.TableRowSorter
 
@@ -40,6 +41,10 @@ class AuthorsPanel(
 ) : JPanel(BorderLayout()) {
     
     private lateinit var authorsTable: JBTable
+    private lateinit var authorCommitsTable: JBTable
+    private lateinit var ticketsTable: JBTable
+    private var authorCommitsSelectionListener: ListSelectionListener? = null
+    private var ticketCommitsSelectionListener: ListSelectionListener? = null
     private val filteredCommits: List<CommitInfo> = commits
     
     init {
@@ -226,7 +231,7 @@ class AuthorsPanel(
         authorCommitsPanel.add(authorCommitsHeaderPanel, BorderLayout.NORTH)
         
         // Create author commits table
-        val authorCommitsTable = JBTable()
+        authorCommitsTable = JBTable()
         val authorCommitsScrollPane = JBScrollPane(authorCommitsTable)
         
         // Create changed files panel
@@ -316,7 +321,7 @@ class AuthorsPanel(
         
         ticketsPanel.add(ticketsHeaderPanel, BorderLayout.NORTH)
         
-        val ticketsTable = JBTable()
+        ticketsTable = JBTable()
         val ticketsScrollPane = JBScrollPane(ticketsTable)
         ticketsPanel.add(ticketsScrollPane, BorderLayout.CENTER)
         
@@ -414,8 +419,13 @@ class AuthorsPanel(
                     val sorter = TableRowSorter(authorCommitsModel)
                     authorCommitsTable.rowSorter = sorter
                     
-                    // Add selection listener to update changed files panel
-                    authorCommitsTable.selectionModel.addListSelectionListener { e ->
+                    // Remove previous selection listener if exists
+                    authorCommitsSelectionListener?.let {
+                        authorCommitsTable.selectionModel.removeListSelectionListener(it)
+                    }
+                    
+                    // Create and add new selection listener to update changed files panel
+                    authorCommitsSelectionListener = ListSelectionListener { e ->
                         if (!e.valueIsAdjusting) {
                             val selectedRow = authorCommitsTable.selectedRow
                             if (selectedRow >= 0) {
@@ -437,6 +447,8 @@ class AuthorsPanel(
                                 }
                             }
                         }
+                    }.also {
+                        authorCommitsTable.selectionModel.addListSelectionListener(it)
                     }
                     
                     // Set up filtering on the search field
@@ -451,8 +463,8 @@ class AuthorsPanel(
                                 sorter.rowFilter = null
                             } else {
                                 try {
-                                    // Create case-insensitive regex filter for message column (3)
-                                    sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 3)
+                                    // Create case-insensitive regex filter for message column (0)
+                                    sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
                                 } catch (ex: java.util.regex.PatternSyntaxException) {
                                     // If the regex pattern is invalid, just show all rows
                                     sorter.rowFilter = null
@@ -609,8 +621,13 @@ class AuthorsPanel(
                                 changedFilesListModel.clear()
                                 changedFilesLabel.text = CommitTracerBundle.message("dialog.changed.files")
                                 
-                                // Add selection listener for the ticket-specific commits
-                                authorCommitsTable.selectionModel.addListSelectionListener { e ->
+                                // Remove previous selection listener if exists
+                                ticketCommitsSelectionListener?.let {
+                                    authorCommitsTable.selectionModel.removeListSelectionListener(it)
+                                }
+                                
+                                // Create and add selection listener for the ticket-specific commits
+                                ticketCommitsSelectionListener = ListSelectionListener { e ->
                                     if (!e.valueIsAdjusting) {
                                         val selectedRow = authorCommitsTable.selectedRow
                                         if (selectedRow >= 0) {
@@ -632,6 +649,8 @@ class AuthorsPanel(
                                             }
                                         }
                                     }
+                                }.also {
+                                    authorCommitsTable.selectionModel.addListSelectionListener(it)
                                 }
                                 
                                 // Set up filtering on the author commits search field for ticket commits
