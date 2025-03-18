@@ -1,87 +1,58 @@
 package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.CommitTracerBundle
-import com.intellij.credentialStore.CredentialAttributes
-import com.intellij.credentialStore.Credentials
-import com.intellij.credentialStore.generateServiceName
-import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.ui.Messages
-import com.intellij.util.io.HttpRequests
-import org.json.JSONObject
-import java.io.IOException
-import java.net.HttpURLConnection
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.time.Duration
+import java.time.LocalDateTime
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Service that interacts with YouTrack API to fetch issue details.
+ * This service uses the YouTrackApiService which handles the direct API communication.
  */
 @Service(Service.Level.PROJECT)
 class YouTrackService(private val project: Project) {
-
-    private val youtrackUrl = "https://youtrack.jetbrains.com"
-    private val apiBaseUrl = "$youtrackUrl/api"
-    private val issueApiUrl = "$apiBaseUrl/issues"
-    private val credentialKey = "commit-tracer-youtrack-token"
-
+    private val LOG = logger<YouTrackService>()
+    private val youTrackApiService = project.getService(YouTrackApiService::class.java)
+    
+    // Thread-safe cache for issue details
+    private val cache = ConcurrentHashMap<String, CachedIssue>()
+    
     /**
      * Fetches issue details from YouTrack by issue ID.
+     * Uses cache if available.
      *
      * @param issueId The ID of the issue to fetch
-     * @return YouTrackIssue object with issue details or null if issue not found
+     * @return YouTrackIssue object with issue details or null if not found
      */
     fun getIssueDetails(issueId: String): YouTrackIssue? {
-        // Get the token or prompt for it if not available
-        val token = getOrRequestToken() ?: return null
-
+        // Try to get from cache first
+        cache[issueId]?.let { cachedIssue ->
+            if (cachedIssue.isValid()) {
+                return cachedIssue.issue
+            }
+        }
+        
         try {
-            val url = "$issueApiUrl/$issueId?fields=id,summary,tags(name,color)"
+            // Fetch ticket info using the YouTrackApiService
+            val ticketInfo = youTrackApiService.fetchTicketInfo(issueId) ?: return null
             
-            val connection = HttpRequests.request(url)
-                .tuner { connection ->
-                    connection.setRequestProperty("Authorization", "Bearer $token")
-                    connection.setRequestProperty("Accept", "application/json")
-                    connection.setRequestProperty("Content-Type", "application/json")
-                }
-                .connect { request ->
-                    val connection = request.connection as HttpURLConnection
-                    val responseCode = connection.responseCode
-                    
-                    if (responseCode == 401) {
-                        // Token is invalid - clear it and notify user
-                        clearToken()
-                        NotificationService.showError(
-                            project,
-                            CommitTracerBundle.message("notification.youtrack.auth.failed"),
-                            "YouTrack Connection Error"
-                        )
-                        return@connect null
-                    }
-                    
-                    if (responseCode == 404) {
-                        NotificationService.showWarning(
-                            project,
-                            CommitTracerBundle.message("notification.youtrack.issue.not.found", issueId),
-                            "YouTrack Issue Not Found"
-                        )
-                        return@connect null
-                    }
-                    
-                    if (responseCode != 200) {
-                        NotificationService.showError(
-                            project,
-                            CommitTracerBundle.message("notification.youtrack.api.error", responseCode),
-                            "YouTrack API Error"
-                        )
-                        return@connect null
-                    }
-                    
-                    val response = request.readString()
-                    parseIssueResponse(response)
-                }
+            // Convert to our model
+            val ytIssue = YouTrackIssue(
+                id = ticketInfo.id,
+                summary = ticketInfo.summary,
+                tags = ticketInfo.tags.map { tag -> YouTrackTag(tag, null) }
+            )
             
-            return connection
-        } catch (e: IOException) {
+            // Cache the result
+            cache[issueId] = CachedIssue(ytIssue, LocalDateTime.now())
+            return ytIssue
+        } catch (e: Exception) {
+            LOG.error("Error fetching issue from YouTrack", e)
             NotificationService.showError(
                 project,
                 CommitTracerBundle.message("notification.youtrack.connection.error", e.message.orEmpty()),
@@ -90,76 +61,79 @@ class YouTrackService(private val project: Project) {
             return null
         }
     }
-
+    
     /**
-     * Parses the JSON response from YouTrack API.
+     * Fetches issue details asynchronously using coroutines.
+     * Should be used from UI contexts to avoid blocking.
+     *
+     * @param issueId The ID of the issue to fetch
+     * @return YouTrackIssue object with issue details or null if not found
      */
-    private fun parseIssueResponse(jsonString: String): YouTrackIssue {
-        val json = JSONObject(jsonString)
-        val id = json.getString("id")
-        val summary = json.getString("summary")
-        val tags = mutableListOf<YouTrackTag>()
-        
-        if (json.has("tags")) {
-            val tagsArray = json.getJSONArray("tags")
-            for (i in 0 until tagsArray.length()) {
-                val tagJson = tagsArray.getJSONObject(i)
-                val name = tagJson.getString("name")
-                val color = if (tagJson.has("color")) tagJson.getString("color") else null
-                tags.add(YouTrackTag(name, color))
-            }
-        }
-        
-        return YouTrackIssue(id, summary, tags)
+    suspend fun getIssueDetailsAsync(issueId: String): YouTrackIssue? = withContext(Dispatchers.IO) {
+        getIssueDetails(issueId)
     }
 
     /**
      * Gets the stored YouTrack API token or requests it from the user.
      */
-    private fun getOrRequestToken(): String? {
-        // Try to get the token from PasswordSafe
-        val credentialAttributes = createCredentialAttributes()
-        val credentials = PasswordSafe.instance.get(credentialAttributes)
-
-        if (credentials != null && !credentials.getPasswordAsString().isNullOrEmpty()) {
-            return credentials.getPasswordAsString()
-        }
+    fun getOrRequestToken(): String? {
+        return youTrackApiService.getOrRequestToken()
+    }
+    
+    /**
+     * Stores the provided token in the password safe.
+     * This method should be called from a background thread to avoid UI freezes.
+     */
+    fun storeToken(token: String) {
+        youTrackApiService.storeToken(token)
         
-        // If no token found, prompt the user
-        val token = Messages.showInputDialog(
-            project,
-            CommitTracerBundle.message("dialog.youtrack.token.prompt"),
-            CommitTracerBundle.message("dialog.youtrack.auth"),
-            null
-        ) ?: return null
-        
-        if (token.isBlank()) {
-            return null
-        }
-        
-        // Save the token for future use
-        PasswordSafe.instance.set(
-            credentialAttributes,
-            Credentials("YouTrack API Token", token)
-        )
-        
-        return token
+        // Clear our cache when token changes
+        cache.clear()
     }
 
     /**
      * Clears the stored token.
      */
-    private fun clearToken() {
-        PasswordSafe.instance.set(createCredentialAttributes(), null)
+    fun clearToken() {
+        youTrackApiService.clearToken()
+        
+        // Clear our cache when token is cleared
+        cache.clear()
     }
-
+    
     /**
-     * Creates credential attributes for the token.
+     * Validates the YouTrack connection by trying to verify the token.
+     * Returns true if connection is valid, false otherwise.
      */
-    private fun createCredentialAttributes(): CredentialAttributes {
-        return CredentialAttributes(
-            generateServiceName("IJ Commit Tracer", credentialKey)
-        )
+    fun validateConnection(): Boolean {
+        val token = youTrackApiService.getOrRequestToken() ?: return false
+        return youTrackApiService.validateToken(token)
+    }
+    
+    /**
+     * Clears the cache.
+     */
+    fun clearCache() {
+        cache.clear()
+        LOG.info("YouTrack issue cache cleared")
+    }
+    
+    companion object {
+        // Cache validity duration - 1 hour
+        private val CACHE_VALIDITY_DURATION = Duration.ofHours(1)
+    }
+    
+    /**
+     * Private class for cached issue with timestamp.
+     */
+    private data class CachedIssue(
+        val issue: YouTrackIssue,
+        val timestamp: LocalDateTime
+    ) {
+        fun isValid(): Boolean {
+            val now = LocalDateTime.now()
+            return Duration.between(timestamp, now) < CACHE_VALIDITY_DURATION
+        }
     }
 
     /**

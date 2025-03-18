@@ -4,29 +4,41 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import java.io.File
 import java.util.Properties
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 /**
  * Utility class for reading environment variables from .env file.
  * This allows developers to store API tokens in a local file rather than 
  * having to enter them in the UI each time.
+ * 
+ * This implementation is thread-safe, with proper synchronization for
+ * both instance creation and property access.
  */
 class EnvFileReader(private val project: Project) {
     private val LOG = logger<EnvFileReader>()
     private val envProperties = Properties()
     private var initialized = false
+    private val lock = ReentrantReadWriteLock()
     
     companion object {
-        private val instances = mutableMapOf<String, EnvFileReader>()
+        // Use ConcurrentHashMap for thread-safe instance storage
+        private val instances = ConcurrentHashMap<String, EnvFileReader>()
         
         /**
          * Gets an instance of EnvFileReader for the given project.
+         * This method is thread-safe and will always return the same instance
+         * for the same project.
          * 
          * @param project The IntelliJ project
          * @return An EnvFileReader instance for the project
          */
         fun getInstance(project: Project): EnvFileReader {
             val projectPath = project.basePath ?: ""
-            return instances.getOrPut(projectPath) {
+            // computeIfAbsent is thread-safe and avoids race conditions
+            return instances.computeIfAbsent(projectPath) {
                 EnvFileReader(project).apply { initialize() }
             }
         }
@@ -34,77 +46,92 @@ class EnvFileReader(private val project: Project) {
     
     /**
      * Loads properties from .env file in the project root directory.
+     * This method is synchronized to prevent multiple threads from 
+     * initializing the properties simultaneously.
      */
     private fun initialize() {
+        // Fast check to avoid acquiring the lock unnecessarily
         if (initialized) return
         
-        try {
-            val projectPath = project.basePath
-            if (projectPath == null) {
-                LOG.warn("Project base path is null, cannot load .env file")
-                return
-            }
+        // Acquire write lock for initialization
+        lock.write {
+            // Double-check inside the lock
+            if (initialized) return
             
-            val envFile = File(projectPath, ".env")
-            LOG.info("Looking for .env file at: ${envFile.absolutePath}")
-            
-            if (envFile.exists()) {
-                envFile.inputStream().use {
-                    envProperties.load(it)
+            try {
+                val projectPath = project.basePath
+                if (projectPath == null) {
+                    LOG.warn("Project base path is null, cannot load .env file")
+                    return
                 }
-                LOG.info("Successfully loaded .env file with ${envProperties.size} properties")
                 
-                // Log the keys (but not the values) for debugging
-                if (envProperties.isNotEmpty()) {
-                    LOG.info("Found properties: ${envProperties.keys.joinToString(", ")}")
-                }
-            } else {
-                LOG.info("No .env file found at ${envFile.absolutePath}, will use credential store")
-                // Try to create a sample .env file for the user
-                try {
-                    val sampleEnvFile = File(projectPath, ".env.sample")
-                    if (!sampleEnvFile.exists()) {
-                        sampleEnvFile.writeText("""
-                            # Sample .env file for Commit Tracer
-                            # Copy this file to .env and fill in your API tokens
-                            
-                            # YouTrack API Configuration
-                            YOUTRACK_API_TOKEN=your_youtrack_token_here
-                            YOUTRACK_API_URL=https://youtrack.jetbrains.com/api
-                            
-                            # HiBob API Configuration
-                            HIBOB_API_TOKEN=your_hibob_token_here
-                            HIBOB_API_URL=https://api.hibob.com/v1
-                        """.trimIndent())
-                        LOG.info("Created sample .env file at ${sampleEnvFile.absolutePath}")
+                val envFile = File(projectPath, ".env")
+                LOG.info("Looking for .env file at: ${envFile.absolutePath}")
+                
+                if (envFile.exists()) {
+                    envFile.inputStream().use {
+                        envProperties.load(it)
                     }
-                } catch (e: Exception) {
-                    LOG.debug("Failed to create sample .env file", e)
+                    LOG.info("Successfully loaded .env file with ${envProperties.size} properties")
+                    
+                    // Log the keys (but not the values) for debugging
+                    if (envProperties.isNotEmpty()) {
+                        LOG.info("Found properties: ${envProperties.keys.joinToString(", ")}")
+                    }
+                } else {
+                    LOG.info("No .env file found at ${envFile.absolutePath}, will use credential store")
+                    // Try to create a sample .env file for the user
+                    try {
+                        val sampleEnvFile = File(projectPath, ".env.sample")
+                        if (!sampleEnvFile.exists()) {
+                            sampleEnvFile.writeText("""
+                                # Sample .env file for Commit Tracer
+                                # Copy this file to .env and fill in your API tokens
+                                
+                                # YouTrack API Configuration
+                                YOUTRACK_API_TOKEN=your_youtrack_token_here
+                                YOUTRACK_API_URL=https://youtrack.jetbrains.com/api
+                                
+                                # HiBob API Configuration
+                                HIBOB_API_TOKEN=your_hibob_token_here
+                                HIBOB_API_URL=https://api.hibob.com/v1
+                            """.trimIndent())
+                            LOG.info("Created sample .env file at ${sampleEnvFile.absolutePath}")
+                        }
+                    } catch (e: Exception) {
+                        LOG.debug("Failed to create sample .env file", e)
+                    }
                 }
+            } catch (e: Exception) {
+                LOG.warn("Failed to load .env file", e)
+            } finally {
+                initialized = true
             }
-        } catch (e: Exception) {
-            LOG.warn("Failed to load .env file", e)
-        } finally {
-            initialized = true
         }
     }
     
     /**
      * Gets a property from the .env file.
+     * Thread-safe implementation that ensures proper initialization.
      * 
      * @param key The property key to look up
      * @return The property value or null if not found
      */
     fun getProperty(key: String): String? {
+        // Initialize if needed (will acquire write lock internally)
         if (!initialized) {
             initialize()
         }
         
-        return envProperties.getProperty(key)
+        // Use read lock for property access
+        return lock.read {
+            envProperties.getProperty(key)
+        }
     }
     
     /**
      * Gets a property from the .env file with a default value.
+     * Thread-safe implementation.
      * 
      * @param key The property key to look up
      * @param defaultValue The default value to return if the property is not found
@@ -116,20 +143,26 @@ class EnvFileReader(private val project: Project) {
     
     /**
      * Checks if a property exists in the .env file.
+     * Thread-safe implementation that ensures proper initialization.
      * 
      * @param key The property key to check
      * @return true if the property exists, false otherwise
      */
     fun hasProperty(key: String): Boolean {
+        // Initialize if needed (will acquire write lock internally)
         if (!initialized) {
             initialize()
         }
         
-        return envProperties.containsKey(key)
+        // Use read lock for property access
+        return lock.read {
+            envProperties.containsKey(key)
+        }
     }
     
     /**
      * Gets a File object representing a path relative to the project root.
+     * This method is thread-safe as it only reads the project path.
      * 
      * @param relativePath The path relative to the project root
      * @return A File object representing the absolute path, or null if project path is unavailable
