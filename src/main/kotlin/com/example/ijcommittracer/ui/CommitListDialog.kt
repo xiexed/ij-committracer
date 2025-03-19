@@ -150,8 +150,8 @@ class CommitListDialog(
         toDate: Date,
         onDateRangeChanged: (Date, Date) -> Unit
     ) {
-        var localFromDate by remember { mutableStateOf(fromDate) }
-        var localToDate by remember { mutableStateOf(toDate) }
+        var fromDateText by remember { mutableStateOf(displayDateFormat.format(fromDate)) }
+        var toDateText by remember { mutableStateOf(displayDateFormat.format(toDate)) }
         
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -159,16 +159,10 @@ class CommitListDialog(
         ) {
             Text(CommitTracerBundle.message("dialog.filter.from"))
             
-            // Using our custom IntelliJ-style text field for date input
+            // Simple text field for date input - direct text editing
             com.example.ijcommittracer.ui.components.IdeaTextField(
-                value = displayDateFormat.format(localFromDate),
-                onValueChange = { 
-                    try {
-                        localFromDate = displayDateFormat.parse(it) ?: localFromDate
-                    } catch (e: Exception) {
-                        // Keep existing date if parsing fails
-                    }
-                },
+                value = fromDateText,
+                onValueChange = { fromDateText = it },
                 modifier = Modifier.width(120.dp),
                 singleLine = true
             )
@@ -176,21 +170,40 @@ class CommitListDialog(
             Text(CommitTracerBundle.message("dialog.filter.to"))
             
             com.example.ijcommittracer.ui.components.IdeaTextField(
-                value = displayDateFormat.format(localToDate),
-                onValueChange = { 
-                    try {
-                        localToDate = displayDateFormat.parse(it) ?: localToDate
-                    } catch (e: Exception) {
-                        // Keep existing date if parsing fails
-                    }
-                },
+                value = toDateText,
+                onValueChange = { toDateText = it },
                 modifier = Modifier.width(120.dp),
                 singleLine = true
             )
             
-            // Use our custom IntelliJ-style button
+            // Apply button applies date filter when clicked
             com.example.ijcommittracer.ui.components.IdeaButton(
-                onClick = { onDateRangeChanged(localFromDate, localToDate) }
+                onClick = {
+                    try {
+                        // Parse the dates from the text fields
+                        val parsedFromDate = displayDateFormat.parse(fromDateText)
+                        val parsedToDate = displayDateFormat.parse(toDateText)
+                        
+                        // Apply date filter if both dates are valid
+                        if (parsedFromDate != null && parsedToDate != null) {
+                            onDateRangeChanged(parsedFromDate, parsedToDate)
+                        } else {
+                            // Show error if parsing fails
+                            NotificationService.showWarning(
+                                project,
+                                "Invalid date format. Please use format yyyy-MM-dd",
+                                "Commit Tracer"
+                            )
+                        }
+                    } catch (e: Exception) {
+                        // Show error if parsing fails
+                        NotificationService.showWarning(
+                            project,
+                            "Invalid date format. Please use format yyyy-MM-dd",
+                            "Commit Tracer"
+                        )
+                    }
+                }
             ) {
                 Text(CommitTracerBundle.message("dialog.filter.apply"))
             }
@@ -919,7 +932,7 @@ class CommitListDialog(
             true
         ) {
             private var newCommits: List<CommitInfo> = emptyList()
-            private var newAuthorStats: Map<String, AuthorStats> = emptyMap()
+            private var newAuthorStats: List<AuthorStats> = emptyList()
             
             override fun run(indicator: com.intellij.openapi.progress.ProgressIndicator) {
                 indicator.isIndeterminate = true
@@ -949,6 +962,7 @@ class CommitListDialog(
                         message = gitCommit.fullMessage.trim(),
                         repositoryName = repository.root.name,
                         branches = listOfNotNull(currentBranch).takeIf { true } ?: emptyList()
+                        // Changed files will have default empty list
                     )
                 }
                 
@@ -988,13 +1002,23 @@ class CommitListDialog(
                     authorMap[author] = updatedStats
                 }
                 
-                newAuthorStats = authorMap
+                // Convert author map to list for UI
+                newAuthorStats = authorMap.values.toList()
             }
             
             override fun onSuccess() {
+                // Update both the commits list and author stats
                 filteredCommits = newCommits
-                selectedCommit = if (newCommits.isNotEmpty()) newCommits.first() else null
+                selectedCommit = newCommits.firstOrNull()
                 
+                // Also update the author stats data
+                val authorStats = this@CommitListDialog.authorStats.toMutableMap()
+                authorStats.clear()
+                newAuthorStats.forEach { stats ->
+                    authorStats[stats.author] = stats
+                }
+                
+                // Notify UI of date filter applied
                 NotificationService.showInfo(
                     project, 
                     CommitTracerBundle.message("notification.filter.applied", filteredCommits.size),
