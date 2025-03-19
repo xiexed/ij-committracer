@@ -1,5 +1,6 @@
 package com.example.ijcommittracer.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -55,6 +56,9 @@ class CommitListDialog(
     private var selectedTabIndex by mutableStateOf(0)
     private var selectedCommit by mutableStateOf<CommitInfo?>(null)
     
+    // Sort mode for author list - default to sort by commit count (descending)
+    private var authorSortMode by mutableStateOf(AuthorSortMode.COMMIT_COUNT_DESC)
+    
     // Use a fixed format with Locale.US for Git command date parameters
     private val gitDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     
@@ -65,6 +69,18 @@ class CommitListDialog(
     // Pattern for YouTrack ticket references
     // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
     private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)")
+    
+    // Enum for author sorting modes
+    enum class AuthorSortMode {
+        NAME_ASC,         // Sort alphabetically by name/email (ascending)
+        NAME_DESC,        // Sort alphabetically by name/email (descending)
+        COMMIT_COUNT_ASC, // Sort by number of commits (ascending)
+        COMMIT_COUNT_DESC,// Sort by number of commits (descending, default)
+        FIRST_COMMIT_ASC, // Sort by first commit date (ascending)
+        FIRST_COMMIT_DESC,// Sort by first commit date (descending)
+        LAST_COMMIT_ASC,  // Sort by last commit date (ascending)
+        LAST_COMMIT_DESC  // Sort by last commit date (descending)
+    }
 
     init {
         title = CommitTracerBundle.message("dialog.commits.title")
@@ -257,27 +273,100 @@ class CommitListDialog(
                         Column {
                             // Use our custom TableHeader component
                             com.example.ijcommittracer.ui.components.TableHeader {
+                                // Author column with ascending/descending indicators
+                                val authorSortIndicator = when (authorSortMode) {
+                                    AuthorSortMode.NAME_ASC -> "▲"
+                                    AuthorSortMode.NAME_DESC -> "▼"
+                                    else -> ""
+                                }
                                 com.example.ijcommittracer.ui.components.HeaderText(
-                                    "Author",
-                                    modifier = Modifier.weight(1f)
+                                    "Author $authorSortIndicator",
+                                    modifier = Modifier.weight(1f).clickable { 
+                                        // Toggle between ascending/descending
+                                        authorSortMode = when (authorSortMode) {
+                                            AuthorSortMode.NAME_ASC -> AuthorSortMode.NAME_DESC
+                                            AuthorSortMode.NAME_DESC -> AuthorSortMode.NAME_ASC
+                                            else -> AuthorSortMode.NAME_ASC
+                                        }
+                                    }
                                 )
+                                
+                                // Commits column with ascending/descending indicators
+                                val commitCountSortIndicator = when (authorSortMode) {
+                                    AuthorSortMode.COMMIT_COUNT_ASC -> "▲"
+                                    AuthorSortMode.COMMIT_COUNT_DESC -> "▼"
+                                    else -> ""
+                                }
                                 com.example.ijcommittracer.ui.components.HeaderText(
-                                    "Commits",
-                                    modifier = Modifier.width(100.dp)
+                                    "Commits $commitCountSortIndicator",
+                                    modifier = Modifier.width(100.dp).clickable { 
+                                        // Toggle between ascending/descending
+                                        authorSortMode = when (authorSortMode) {
+                                            AuthorSortMode.COMMIT_COUNT_ASC -> AuthorSortMode.COMMIT_COUNT_DESC
+                                            AuthorSortMode.COMMIT_COUNT_DESC -> AuthorSortMode.COMMIT_COUNT_ASC
+                                            else -> AuthorSortMode.COMMIT_COUNT_DESC
+                                        }
+                                    }
                                 )
+                                
+                                // First Commit column with ascending/descending indicators
+                                val firstCommitSortIndicator = when (authorSortMode) {
+                                    AuthorSortMode.FIRST_COMMIT_ASC -> "▲"
+                                    AuthorSortMode.FIRST_COMMIT_DESC -> "▼"
+                                    else -> ""
+                                }
                                 com.example.ijcommittracer.ui.components.HeaderText(
-                                    "First Commit",
-                                    modifier = Modifier.width(120.dp)
+                                    "First Commit $firstCommitSortIndicator",
+                                    modifier = Modifier.width(120.dp).clickable { 
+                                        // Toggle between ascending/descending
+                                        authorSortMode = when (authorSortMode) {
+                                            AuthorSortMode.FIRST_COMMIT_ASC -> AuthorSortMode.FIRST_COMMIT_DESC
+                                            AuthorSortMode.FIRST_COMMIT_DESC -> AuthorSortMode.FIRST_COMMIT_ASC
+                                            else -> AuthorSortMode.FIRST_COMMIT_ASC
+                                        }
+                                    }
                                 )
+                                
+                                // Last Commit column with ascending/descending indicators
+                                val lastCommitSortIndicator = when (authorSortMode) {
+                                    AuthorSortMode.LAST_COMMIT_ASC -> "▲"
+                                    AuthorSortMode.LAST_COMMIT_DESC -> "▼" 
+                                    else -> ""
+                                }
                                 com.example.ijcommittracer.ui.components.HeaderText(
-                                    "Last Commit",
-                                    modifier = Modifier.width(120.dp)
+                                    "Last Commit $lastCommitSortIndicator",
+                                    modifier = Modifier.width(120.dp).clickable { 
+                                        // Toggle between ascending/descending
+                                        authorSortMode = when (authorSortMode) {
+                                            AuthorSortMode.LAST_COMMIT_ASC -> AuthorSortMode.LAST_COMMIT_DESC
+                                            AuthorSortMode.LAST_COMMIT_DESC -> AuthorSortMode.LAST_COMMIT_ASC
+                                            else -> AuthorSortMode.LAST_COMMIT_DESC
+                                        }
+                                    }
                                 )
                             }
                             
-                            // Authors list with our custom SelectableList
+                            // Authors list with our custom SelectableList - with sorting based on selected mode
                             val filteredAuthors = authorStats.filter { 
                                 searchText.isEmpty() || it.author.contains(searchText, ignoreCase = true)
+                            }.let { authors ->
+                                when (authorSortMode) {
+                                    // Name sorting - both directions
+                                    AuthorSortMode.NAME_ASC -> authors.sortedBy { it.author.lowercase() }
+                                    AuthorSortMode.NAME_DESC -> authors.sortedByDescending { it.author.lowercase() }
+                                    
+                                    // Commit count sorting - both directions
+                                    AuthorSortMode.COMMIT_COUNT_ASC -> authors.sortedBy { it.commitCount }
+                                    AuthorSortMode.COMMIT_COUNT_DESC -> authors.sortedByDescending { it.commitCount }
+                                    
+                                    // First commit date sorting - both directions
+                                    AuthorSortMode.FIRST_COMMIT_ASC -> authors.sortedBy { it.firstCommitDate }
+                                    AuthorSortMode.FIRST_COMMIT_DESC -> authors.sortedByDescending { it.firstCommitDate }
+                                    
+                                    // Last commit date sorting - both directions
+                                    AuthorSortMode.LAST_COMMIT_ASC -> authors.sortedBy { it.lastCommitDate }
+                                    AuthorSortMode.LAST_COMMIT_DESC -> authors.sortedByDescending { it.lastCommitDate }
+                                }
                             }
                             
                             // Initialize the selected author if not already set
