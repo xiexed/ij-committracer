@@ -33,7 +33,7 @@ interface EnvChangeListener : EventListener {
  * This implementation is thread-safe, with proper synchronization for
  * both instance creation and property access.
  */
-class EnvFileReader(private val project: Project) {
+class EnvFileReader private constructor(private val project: Project?, private val envFilePath: String) {
     private val LOG = logger<EnvFileReader>()
     private val envProperties = Properties()
     private var initialized = false
@@ -59,15 +59,31 @@ class EnvFileReader(private val project: Project) {
          */
         fun getInstance(project: Project): EnvFileReader {
             val projectPath = project.basePath ?: ""
+            val envFilePath = "$projectPath/.env"
             // computeIfAbsent is thread-safe and avoids race conditions
-            return instances.computeIfAbsent(projectPath) {
-                EnvFileReader(project).apply { initialize() }
+            return instances.computeIfAbsent(envFilePath) {
+                EnvFileReader(project, envFilePath).apply { initialize() }
+            }
+        }
+        
+        /**
+         * Gets an instance of EnvFileReader for the given env file path.
+         * This method is thread-safe and will always return the same instance
+         * for the same file path.
+         * 
+         * @param envFilePath The absolute path to the .env file
+         * @return An EnvFileReader instance for the file path
+         */
+        fun getInstance(envFilePath: String): EnvFileReader {
+            // computeIfAbsent is thread-safe and avoids race conditions
+            return instances.computeIfAbsent(envFilePath) {
+                EnvFileReader(null, envFilePath).apply { initialize() }
             }
         }
     }
     
     /**
-     * Loads properties from .env file in the project root directory.
+     * Loads properties from .env file in the project root directory or from specified path.
      * This method is synchronized to prevent multiple threads from 
      * initializing the properties simultaneously.
      */
@@ -81,13 +97,7 @@ class EnvFileReader(private val project: Project) {
             if (initialized) return
             
             try {
-                val projectPath = project.basePath
-                if (projectPath == null) {
-                    LOG.warn("Project base path is null, cannot load .env file")
-                    return
-                }
-                
-                val envFile = File(projectPath, ".env")
+                val envFile = File(envFilePath)
                 LOG.info("Looking for .env file at: ${envFile.absolutePath}")
                 
                 if (envFile.exists()) {
@@ -105,26 +115,33 @@ class EnvFileReader(private val project: Project) {
                     }
                 } else {
                     LOG.info("No .env file found at ${envFile.absolutePath}, will use credential store")
-                    // Try to create a sample .env file for the user
-                    try {
-                        val sampleEnvFile = File(projectPath, ".env.sample")
-                        if (!sampleEnvFile.exists()) {
-                            sampleEnvFile.writeText("""
-                                # Sample .env file for Commit Tracer
-                                # Copy this file to .env and fill in your API tokens
-                                
-                                # YouTrack API Configuration
-                                YOUTRACK_API_TOKEN=your_youtrack_token_here
-                                YOUTRACK_API_URL=https://youtrack.jetbrains.com/api
-                                
-                                # HiBob API Configuration
-                                HIBOB_API_TOKEN=your_hibob_token_here
-                                HIBOB_API_URL=https://api.hibob.com/v1
-                            """.trimIndent())
-                            LOG.info("Created sample .env file at ${sampleEnvFile.absolutePath}")
+                    
+                    // Only create sample file if we have a project
+                    if (project != null) {
+                        val projectPath = project.basePath
+                        if (projectPath != null) {
+                            try {
+                                val sampleEnvFile = File(projectPath, ".env.sample")
+                                if (!sampleEnvFile.exists()) {
+                                    sampleEnvFile.writeText("""
+                                        # Sample .env file for Commit Tracer
+                                        # Copy this file to .env and fill in your API tokens
+                                        
+                                        # YouTrack API Configuration
+                                        YOUTRACK_API_TOKEN=your_youtrack_token_here
+                                        YOUTRACK_API_URL=https://youtrack.jetbrains.com/api
+                                        
+                                        # HiBob API Configuration
+                                        HIBOB_SERVICE_USER_ID=your_service_user_id_here
+                                        HIBOB_API_TOKEN=your_hibob_token_here
+                                        HIBOB_API_URL=https://api.hibob.com/v1
+                                    """.trimIndent())
+                                    LOG.info("Created sample .env file at ${sampleEnvFile.absolutePath}")
+                                }
+                            } catch (e: Exception) {
+                                LOG.debug("Failed to create sample .env file", e)
+                            }
                         }
-                    } catch (e: Exception) {
-                        LOG.debug("Failed to create sample .env file", e)
                     }
                 }
             } catch (e: Exception) {
@@ -211,8 +228,7 @@ class EnvFileReader(private val project: Project) {
         // Fast check - if we don't have a hash, we don't have a file
         if (envFileHash == null) return false
         
-        val projectPath = project.basePath ?: return false
-        val envFile = File(projectPath, ".env")
+        val envFile = File(envFilePath)
         
         // If file doesn't exist anymore, clear properties
         if (!envFile.exists()) {
@@ -223,7 +239,7 @@ class EnvFileReader(private val project: Project) {
                 LOG.info(".env file no longer exists, cleared properties")
                 
                 // Notify listeners that all properties are gone
-                if (oldKeys.isNotEmpty()) {
+                if (oldKeys.isNotEmpty() && project != null) {
                     notifyListeners(oldKeys)
                 }
             }
@@ -295,8 +311,10 @@ class EnvFileReader(private val project: Project) {
      */
     private fun notifyListeners(changedKeys: Set<String>) {
         try {
-            LOG.info("Notifying listeners about changed environment variables: ${changedKeys.joinToString(", ")}")
-            project.messageBus.syncPublisher(ENV_CHANGED_TOPIC).onEnvChanged(changedKeys)
+            if (project != null) {
+                LOG.info("Notifying listeners about changed environment variables: ${changedKeys.joinToString(", ")}")
+                project.messageBus.syncPublisher(ENV_CHANGED_TOPIC).onEnvChanged(changedKeys)
+            }
         } catch (e: Exception) {
             LOG.warn("Failed to notify listeners about env changes", e)
         }
@@ -310,6 +328,7 @@ class EnvFileReader(private val project: Project) {
      * @return A File object representing the absolute path, or null if project path is unavailable
      */
     fun getFileInProjectRoot(relativePath: String): File? {
+        if (project == null) return null
         val projectPath = project.basePath ?: return null
         return File(projectPath, relativePath)
     }
@@ -321,8 +340,7 @@ class EnvFileReader(private val project: Project) {
      * @return true if the file was reloaded, false otherwise
      */
     fun forceReload(): Boolean {
-        val projectPath = project.basePath ?: return false
-        val envFile = File(projectPath, ".env")
+        val envFile = File(envFilePath)
         
         lock.write {
             try {
@@ -342,7 +360,7 @@ class EnvFileReader(private val project: Project) {
                     val changedKeys = findChangedKeys(oldProperties, envProperties)
                     
                     // Notify listeners if there are changes
-                    if (changedKeys.isNotEmpty()) {
+                    if (changedKeys.isNotEmpty() && project != null) {
                         notifyListeners(changedKeys)
                         return true
                     }
@@ -353,7 +371,7 @@ class EnvFileReader(private val project: Project) {
                     envFileHash = null
                     LOG.info("Forced reload attempted but .env file does not exist")
                     
-                    if (hadProperties) {
+                    if (hadProperties && project != null) {
                         notifyListeners(oldProperties.keys.map { it.toString() }.toSet())
                         return true
                     }
