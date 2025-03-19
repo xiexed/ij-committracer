@@ -1,6 +1,7 @@
 package com.example.ijcommittracer.services
 
 import com.example.ijcommittracer.CommitTracerBundle
+import com.example.ijcommittracer.util.EnvChangeListener
 import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.credentialStore.Credentials
@@ -14,34 +15,74 @@ import com.intellij.util.io.HttpRequests
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Service for fetching issue information from YouTrack.
  * This service connects to YouTrack API and retrieves issue details.
  */
 @Service(Service.Level.PROJECT)
-class YouTrackApiService(private val project: Project) {
+class YouTrackApiService(private val project: Project) : EnvChangeListener {
     private val logger = Logger.getInstance(YouTrackApiService::class.java)
     
     // Constants for .env file properties
     private val YOUTRACK_API_TOKEN_KEY = "YOUTRACK_API_TOKEN"
     private val YOUTRACK_API_URL_KEY = "YOUTRACK_API_URL"
     
-    // Get base URL from .env file or use default from bundle
-    private val youtrackUrl by lazy { 
-        EnvFileReader.getInstance(project).getProperty(
-            YOUTRACK_API_URL_KEY, 
-            CommitTracerBundle.message("youtrack.api.url")
-        )
-    }
-    
-    // Make these lazy too to ensure they're initialized after youtrackUrl
-    private val apiBaseUrl by lazy { "$youtrackUrl/api" }
-    private val issueApiUrl by lazy { "$apiBaseUrl/issues" }
-    private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
+    // Use AtomicReference for thread-safe mutable values
+    private val youtrackUrlRef = AtomicReference<String>()
+    private val apiBaseUrlRef = AtomicReference<String>()
+    private val issueApiUrlRef = AtomicReference<String>()
     
     // Cache to avoid repeated API calls for the same ticket
     private val ticketCache = mutableMapOf<String, TicketInfo>()
+    private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
+    
+    init {
+        // Subscribe to environment changes
+        project.messageBus.connect().subscribe(EnvFileReader.ENV_CHANGED_TOPIC, this)
+        
+        // Initialize URL values
+        refreshUrls()
+    }
+    
+    /**
+     * Initialize or refresh the URL values from environment variables
+     */
+    private fun refreshUrls() {
+        val envReader = EnvFileReader.getInstance(project)
+        val youtrackUrl = envReader.getProperty(
+            YOUTRACK_API_URL_KEY, 
+            CommitTracerBundle.message("youtrack.api.url")
+        )
+        
+        youtrackUrlRef.set(youtrackUrl)
+        apiBaseUrlRef.set("$youtrackUrl/api")
+        issueApiUrlRef.set("${apiBaseUrlRef.get()}/issues")
+        
+        logger.info("YouTrack URLs refreshed: base=${youtrackUrlRef.get()}")
+    }
+    
+    /**
+     * Handler for environment variable changes
+     */
+    override fun onEnvChanged(changedKeys: Set<String>?) {
+        // If changedKeys is null, all keys are considered changed
+        if (changedKeys == null || 
+            changedKeys.contains(YOUTRACK_API_TOKEN_KEY) || 
+            changedKeys.contains(YOUTRACK_API_URL_KEY)) {
+            
+            logger.info("Detected environment changes affecting YouTrack configuration")
+            
+            // Clear cache when tokens or URLs change
+            ticketCache.clear()
+            
+            // Refresh URLs if they've changed
+            if (changedKeys == null || changedKeys.contains(YOUTRACK_API_URL_KEY)) {
+                refreshUrls()
+            }
+        }
+    }
 
     /**
      * Fetches ticket information for a specific issue ID.
@@ -64,6 +105,7 @@ class YouTrackApiService(private val project: Project) {
         }
         
         try {
+            val issueApiUrl = issueApiUrlRef.get()
             val url = "$issueApiUrl/$issueId?fields=idReadable,summary,tags(name,id)"
             val connection = HttpRequests.request(url)
                 .tuner { conn ->
@@ -172,6 +214,9 @@ class YouTrackApiService(private val project: Project) {
                 Credentials("YouTrack API Token", token)
             )
             logger.info("YouTrack API token stored successfully")
+            
+            // Clear cache when token changes
+            ticketCache.clear()
         }
     }
     
@@ -185,6 +230,9 @@ class YouTrackApiService(private val project: Project) {
             com.intellij.util.SlowOperations.assertSlowOperationsAreAllowed()
             PasswordSafe.instance.set(createCredentialAttributes(), null)
             logger.info("YouTrack API token cleared")
+            
+            // Clear cache when token is cleared
+            ticketCache.clear()
         }
     }
     
@@ -221,6 +269,7 @@ class YouTrackApiService(private val project: Project) {
     fun validateToken(token: String): Boolean {
         try {
             // Try to fetch a user profile or a simple API endpoint to validate token
+            val apiBaseUrl = apiBaseUrlRef.get()
             val url = "$apiBaseUrl/users/me?fields=id,name"
             val result = HttpRequests.request(url)
                 .tuner { conn ->
@@ -237,6 +286,14 @@ class YouTrackApiService(private val project: Project) {
             logger.warn("Failed to validate YouTrack token", e)
             return false
         }
+    }
+    
+    /**
+     * Clears the ticket cache.
+     */
+    fun clearCache() {
+        ticketCache.clear()
+        logger.info("YouTrack ticket cache cleared")
     }
     
     /**

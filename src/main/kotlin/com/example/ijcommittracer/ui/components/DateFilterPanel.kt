@@ -1,49 +1,73 @@
 package com.example.ijcommittracer.ui.components
 
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.example.ijcommittracer.CommitTracerBundle
-import com.example.ijcommittracer.ui.util.JDateChooser
-import com.intellij.ui.components.JBLabel
-import java.awt.Dimension
-import java.awt.FlowLayout
 import java.text.SimpleDateFormat
 import java.util.*
-import javax.swing.JButton
-import javax.swing.JPanel
 
 /**
- * Panel for date range filtering.
+ * Composable for date range selection
  */
-class DateFilterPanel(private val fromDate: Date, private val toDate: Date, private val onFilterApplied: (Date, Date) -> Unit) : JPanel(FlowLayout(FlowLayout.RIGHT)) {
+@Composable
+fun DateFilterPanel(
+    fromDate: Date,
+    toDate: Date,
+    onFilterApplied: (Date, Date) -> Unit
+) {
+    var localFromDate by remember { mutableStateOf(fromDate) }
+    var localToDate by remember { mutableStateOf(toDate) }
+    val displayDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     
-    private val displayDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    lateinit var fromDatePicker: JDateChooser
-    lateinit var toDatePicker: JDateChooser
-    lateinit var filterButton: JButton
-    
-    init {
-        initialize()
-    }
-    
-    private fun initialize() {
-        add(JBLabel(CommitTracerBundle.message("dialog.filter.from")))
-        fromDatePicker = JDateChooser(fromDate, displayDateFormat)
-        fromDatePicker.preferredSize = Dimension(120, 30)
-        add(fromDatePicker)
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(CommitTracerBundle.message("dialog.filter.from"))
         
-        add(JBLabel(CommitTracerBundle.message("dialog.filter.to")))
-        toDatePicker = JDateChooser(toDate, displayDateFormat)
-        toDatePicker.preferredSize = Dimension(120, 30)
-        add(toDatePicker)
+        // Using a text field for date input (in a real app, we'd use a proper date picker)
+        OutlinedTextField(
+            value = displayDateFormat.format(localFromDate),
+            onValueChange = { 
+                try {
+                    val parsedDate = displayDateFormat.parse(it)
+                    if (parsedDate != null) {
+                        localFromDate = parsedDate
+                    }
+                } catch (e: Exception) {
+                    // Keep existing date if parsing fails
+                }
+            },
+            modifier = Modifier.width(120.dp),
+            singleLine = true
+        )
         
-        filterButton = JButton(CommitTracerBundle.message("dialog.filter.apply"))
-        filterButton.addActionListener { 
-            val newFromDate = fromDatePicker.date
-            val newToDate = toDatePicker.date
-            
-            if (newFromDate != null && newToDate != null) {
-                onFilterApplied(newFromDate, newToDate)
-            }
+        Text(CommitTracerBundle.message("dialog.filter.to"))
+        
+        OutlinedTextField(
+            value = displayDateFormat.format(localToDate),
+            onValueChange = { 
+                try {
+                    val parsedDate = displayDateFormat.parse(it)
+                    if (parsedDate != null) {
+                        localToDate = parsedDate
+                    }
+                } catch (e: Exception) {
+                    // Keep existing date if parsing fails
+                }
+            },
+            modifier = Modifier.width(120.dp),
+            singleLine = true
+        )
+        
+        Button(
+            onClick = { onFilterApplied(localFromDate, localToDate) }
+        ) {
+            Text(CommitTracerBundle.message("dialog.filter.apply"))
         }
-        add(filterButton)
     }
 }

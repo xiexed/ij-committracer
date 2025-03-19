@@ -4,9 +4,9 @@
 
 ### Development
 - **Compile:** `./gradlew compileKotlin`
-- **Run/Debug:** `./gradlew runIde`
+- **Run/Debug:** `./gradlew runIde`, don't use it
 - **Build Plugin:** `./gradlew buildPlugin`
-- **Clean:** `./gradlew clean`
+- **Clean:** `./gradlew clean`, don't use it
 
 ### Workflow Guidelines
 - Commit after every meaningful change
@@ -22,11 +22,13 @@
 - Prefer light services when possible for better performance
 
 ### UI Components
-- Use JetBrains UI components from `com.intellij.ui` wherever possible
-- Follow IntelliJ UI guidelines for consistency
-- Leverage `DialogWrapper` for modal dialogs
-- Use `OnePixelSplitter` instead of standard JSplitter
-- Prefer `JBTable` over JTable, `JBLabel` over JLabel, etc.
+- Use Jetpack Compose for UI instead of traditional Swing components
+- Create custom UI components that mimic IntelliJ IDEA's look and feel
+- Follow Material3 design principles with IntelliJ-styled overrides
+- Implement reactive state management using MutableState
+- Integrate Compose with existing IntelliJ Platform components using ComposePanel
+- For dialogs, use Compose UI within DialogWrapper 
+- Use custom selectable lists for data display instead of JBTable
 
 ### Kotlin Style
 - Use idiomatic Kotlin (extension functions, lambdas, etc.)
@@ -45,3 +47,4 @@
 - Use read/write actions appropriately when accessing PSI
 - Leverage caching where appropriate
 - Be mindful of memory leaks in listeners
+- Follow Compose performance best practices for efficient recomposition

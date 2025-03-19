@@ -1,5 +1,6 @@
 package com.example.ijcommittracer.services
 
+import com.example.ijcommittracer.util.EnvChangeListener
 import com.example.ijcommittracer.util.EnvFileReader
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -11,22 +12,25 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.time.Duration
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Service for interacting with HiBob API to fetch employee information.
  * Uses coroutines for async operations and implements efficient caching.
  */
 @Service(Service.Level.PROJECT)
-class HiBobApiService(private val project: Project) {
+class HiBobApiService(private val project: Project) : EnvChangeListener {
     
     // Constants for .env file properties
     private val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
     private val HIBOB_API_URL_KEY = "HIBOB_API_URL"
     private val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
+    
+    // Thread-safe mutable URL reference
+    private val apiBaseUrlRef = AtomicReference<String>()
     
     private val cache = ConcurrentHashMap<String, CachedEmployeeInfo>()
     private val client = OkHttpClient.Builder()
@@ -37,12 +41,56 @@ class HiBobApiService(private val project: Project) {
     private val LOG = logger<HiBobApiService>()
     private val tokenStorage = TokenStorageService.getInstance(project)
     
+    init {
+        // Subscribe to environment changes
+        project.messageBus.connect().subscribe(EnvFileReader.ENV_CHANGED_TOPIC, this)
+        
+        // Initialize URL
+        refreshUrl()
+    }
+    
+    /**
+     * Initialize or refresh the API URL from environment variables
+     */
+    private fun refreshUrl() {
+        val envReader = EnvFileReader.getInstance(project)
+        val baseUrl = envReader.getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
+        
+        apiBaseUrlRef.set(baseUrl)
+        LOG.info("HiBob API URL refreshed: ${apiBaseUrlRef.get()}")
+    }
+    
+    /**
+     * Handler for environment variable changes
+     */
+    override fun onEnvChanged(changedKeys: Set<String>?) {
+        // If changedKeys is null, all keys are considered changed
+        if (changedKeys == null || 
+            changedKeys.contains(HIBOB_API_TOKEN_KEY) || 
+            changedKeys.contains(HIBOB_API_URL_KEY)) {
+            
+            LOG.info("Detected environment changes affecting HiBob configuration")
+            
+            // Clear cache when tokens or URLs change
+            clearCache()
+            
+            // Refresh URLs if they've changed
+            if (changedKeys == null || changedKeys.contains(HIBOB_API_URL_KEY)) {
+                refreshUrl()
+            }
+        }
+    }
+    
     /**
      * Set the API credentials.
      */
     fun setApiCredentials(token: String, baseUrl: String = "https://api.hibob.com/v1") {
         tokenStorage.setHiBobToken(token)
         tokenStorage.setHiBobBaseUrl(baseUrl)
+        
+        // Update our cached URL
+        apiBaseUrlRef.set(baseUrl)
+        
         // Clear cache when credentials change
         clearCache()
     }
@@ -100,14 +148,14 @@ class HiBobApiService(private val project: Project) {
      */
     fun clearCache() {
         cache.clear()
+        LOG.info("HiBob employee cache cleared")
     }
     
     /**
      * Fetch employee information from HiBob API.
      */
     private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
-        // Try to get base URL from .env file first
-        val baseUrl = EnvFileReader.getInstance(project).getProperty(HIBOB_API_URL_KEY) ?: tokenStorage.getHiBobBaseUrl()
+        val baseUrl = apiBaseUrlRef.get() ?: refreshUrl().let { apiBaseUrlRef.get() }
         
         val request = Request.Builder()
             .url("$baseUrl/people?email=$email")

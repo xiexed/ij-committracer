@@ -2,12 +2,28 @@ package com.example.ijcommittracer.util
 
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
+import com.intellij.util.messages.Topic
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.security.MessageDigest
+import java.util.EventListener
 import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+
+/**
+ * Interface for listeners that want to be notified of environment variable changes.
+ */
+interface EnvChangeListener : EventListener {
+    /**
+     * Called when the environment variables change.
+     * @param changedKeys Set of keys that have changed, or null if all properties should be considered changed
+     */
+    fun onEnvChanged(changedKeys: Set<String>? = null)
+}
 
 /**
  * Utility class for reading environment variables from .env file.
@@ -21,11 +37,17 @@ class EnvFileReader(private val project: Project) {
     private val LOG = logger<EnvFileReader>()
     private val envProperties = Properties()
     private var initialized = false
+    private var envFileHash: String? = null
     private val lock = ReentrantReadWriteLock()
     
     companion object {
         // Use ConcurrentHashMap for thread-safe instance storage
         private val instances = ConcurrentHashMap<String, EnvFileReader>()
+        
+        /**
+         * Topic for publishing environment change events
+         */
+        val ENV_CHANGED_TOPIC = Topic.create("EnvFileChanged", EnvChangeListener::class.java)
         
         /**
          * Gets an instance of EnvFileReader for the given project.
@@ -69,6 +91,9 @@ class EnvFileReader(private val project: Project) {
                 LOG.info("Looking for .env file at: ${envFile.absolutePath}")
                 
                 if (envFile.exists()) {
+                    // Calculate the file hash before loading
+                    envFileHash = calculateFileHash(envFile)
+                    
                     envFile.inputStream().use {
                         envProperties.load(it)
                     }
@@ -111,6 +136,19 @@ class EnvFileReader(private val project: Project) {
     }
     
     /**
+     * Calculates a hash of the given file's contents.
+     * 
+     * @param file The file to hash
+     * @return A hexadecimal string representation of the file's hash
+     */
+    private fun calculateFileHash(file: File): String {
+        val bytes = Files.readAllBytes(Paths.get(file.toURI()))
+        val md = MessageDigest.getInstance("SHA-256")
+        val digest = md.digest(bytes)
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+    
+    /**
      * Gets a property from the .env file.
      * Thread-safe implementation that ensures proper initialization.
      * 
@@ -121,6 +159,9 @@ class EnvFileReader(private val project: Project) {
         // Initialize if needed (will acquire write lock internally)
         if (!initialized) {
             initialize()
+        } else {
+            // Check if the file has changed
+            checkAndReloadIfChanged()
         }
         
         // Use read lock for property access
@@ -152,11 +193,112 @@ class EnvFileReader(private val project: Project) {
         // Initialize if needed (will acquire write lock internally)
         if (!initialized) {
             initialize()
+        } else {
+            // Check if the file has changed
+            checkAndReloadIfChanged()
         }
         
         // Use read lock for property access
         return lock.read {
             envProperties.containsKey(key)
+        }
+    }
+    
+    /**
+     * Checks if the .env file has changed and reloads it if necessary.
+     */
+    private fun checkAndReloadIfChanged(): Boolean {
+        // Fast check - if we don't have a hash, we don't have a file
+        if (envFileHash == null) return false
+        
+        val projectPath = project.basePath ?: return false
+        val envFile = File(projectPath, ".env")
+        
+        // If file doesn't exist anymore, clear properties
+        if (!envFile.exists()) {
+            lock.write {
+                val oldKeys = envProperties.keys.map { it.toString() }.toSet()
+                envProperties.clear()
+                envFileHash = null
+                LOG.info(".env file no longer exists, cleared properties")
+                
+                // Notify listeners that all properties are gone
+                if (oldKeys.isNotEmpty()) {
+                    notifyListeners(oldKeys)
+                }
+            }
+            return true
+        }
+        
+        // Calculate current hash
+        val currentHash = calculateFileHash(envFile)
+        
+        // If hash has changed, reload properties
+        if (currentHash != envFileHash) {
+            lock.write {
+                try {
+                    // Save old properties to detect changes
+                    val oldProperties = Properties()
+                    oldProperties.putAll(envProperties)
+                    
+                    envProperties.clear()
+                    envFile.inputStream().use {
+                        envProperties.load(it)
+                    }
+                    envFileHash = currentHash
+                    LOG.info(".env file has changed, reloaded properties")
+                    
+                    // Find changed keys
+                    val changedKeys = findChangedKeys(oldProperties, envProperties)
+                    
+                    // Notify listeners if there are changes
+                    if (changedKeys.isNotEmpty()) {
+                        notifyListeners(changedKeys)
+                    }
+                } catch (e: Exception) {
+                    LOG.warn("Failed to reload .env file after change", e)
+                }
+            }
+            return true
+        }
+        
+        return false
+    }
+    
+    /**
+     * Find keys that have been added, removed, or changed between old and new properties.
+     */
+    private fun findChangedKeys(oldProps: Properties, newProps: Properties): Set<String> {
+        val changedKeys = mutableSetOf<String>()
+        
+        // Find added or changed keys
+        for (key in newProps.keys) {
+            val strKey = key.toString()
+            if (!oldProps.containsKey(key) || oldProps.getProperty(strKey) != newProps.getProperty(strKey)) {
+                changedKeys.add(strKey)
+            }
+        }
+        
+        // Find removed keys
+        for (key in oldProps.keys) {
+            val strKey = key.toString()
+            if (!newProps.containsKey(key)) {
+                changedKeys.add(strKey)
+            }
+        }
+        
+        return changedKeys
+    }
+    
+    /**
+     * Notify listeners of changed keys.
+     */
+    private fun notifyListeners(changedKeys: Set<String>) {
+        try {
+            LOG.info("Notifying listeners about changed environment variables: ${changedKeys.joinToString(", ")}")
+            project.messageBus.syncPublisher(ENV_CHANGED_TOPIC).onEnvChanged(changedKeys)
+        } catch (e: Exception) {
+            LOG.warn("Failed to notify listeners about env changes", e)
         }
     }
     
@@ -170,5 +312,56 @@ class EnvFileReader(private val project: Project) {
     fun getFileInProjectRoot(relativePath: String): File? {
         val projectPath = project.basePath ?: return null
         return File(projectPath, relativePath)
+    }
+    
+    /**
+     * Forces a reload of the .env file.
+     * This can be called manually when you want to ensure the latest values are loaded.
+     * 
+     * @return true if the file was reloaded, false otherwise
+     */
+    fun forceReload(): Boolean {
+        val projectPath = project.basePath ?: return false
+        val envFile = File(projectPath, ".env")
+        
+        lock.write {
+            try {
+                // Save old properties to detect changes
+                val oldProperties = Properties()
+                oldProperties.putAll(envProperties)
+                
+                envProperties.clear()
+                if (envFile.exists()) {
+                    envFile.inputStream().use {
+                        envProperties.load(it)
+                    }
+                    envFileHash = calculateFileHash(envFile)
+                    LOG.info("Forced reload of .env file, properties: ${envProperties.size}")
+                    
+                    // Find changed keys
+                    val changedKeys = findChangedKeys(oldProperties, envProperties)
+                    
+                    // Notify listeners if there are changes
+                    if (changedKeys.isNotEmpty()) {
+                        notifyListeners(changedKeys)
+                        return true
+                    }
+                } else {
+                    // Only notify if we previously had properties
+                    val hadProperties = !oldProperties.isEmpty
+                    
+                    envFileHash = null
+                    LOG.info("Forced reload attempted but .env file does not exist")
+                    
+                    if (hadProperties) {
+                        notifyListeners(oldProperties.keys.map { it.toString() }.toSet())
+                        return true
+                    }
+                }
+            } catch (e: Exception) {
+                LOG.warn("Failed to force reload .env file", e)
+            }
+        }
+        return false
     }
 }
