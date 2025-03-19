@@ -206,6 +206,20 @@ class CommitListDialog(
         var searchText by remember { mutableStateOf("") }
         var selectedAuthor by remember { mutableStateOf<AuthorStats?>(null) }
         var authorCommits by remember { mutableStateOf<List<CommitInfo>>(emptyList()) }
+        var selectedAuthorCommit by remember { mutableStateOf<CommitInfo?>(null) }
+        
+        // Update author commits when the filtered commits list changes
+        LaunchedEffect(filteredCommits, selectedAuthor) {
+            if (selectedAuthor != null) {
+                val newAuthorCommits = filteredCommits.filter { it.author == selectedAuthor?.author }
+                authorCommits = newAuthorCommits
+                
+                // Update selected commit when the list changes
+                if (selectedAuthorCommit == null || !newAuthorCommits.contains(selectedAuthorCommit)) {
+                    selectedAuthorCommit = newAuthorCommits.firstOrNull()
+                }
+            }
+        }
         
         Column(modifier = Modifier.fillMaxSize()) {
             // Search field for authors using our custom IntelliJ-style TextField
@@ -253,13 +267,27 @@ class CommitListDialog(
                                 searchText.isEmpty() || it.author.contains(searchText, ignoreCase = true)
                             }
                             
-                            // Using our custom IdeaSelectableList for IntelliJ styling
+                            // Initialize the selected author if not already set
+                            LaunchedEffect(filteredAuthors) {
+                                if (selectedAuthor == null && filteredAuthors.isNotEmpty()) {
+                                    selectedAuthor = filteredAuthors.first()
+                                    // Initially select all commits by this author
+                                    authorCommits = filteredCommits.filter { it.author == filteredAuthors.first().author }
+                                    selectedAuthorCommit = authorCommits.firstOrNull()
+                                }
+                            }
+                            
+                            // Using our custom IdeaSelectableList for IntelliJ styling with keyboard navigation
                             com.example.ijcommittracer.ui.components.IdeaSelectableList(
                                 items = filteredAuthors,
                                 selectedItem = selectedAuthor,
                                 onItemSelected = { newSelectedAuthor ->
                                     selectedAuthor = newSelectedAuthor
-                                    authorCommits = filteredCommits.filter { it.author == newSelectedAuthor.author }
+                                    // Update commits for the selected author
+                                    val newAuthorCommits = filteredCommits.filter { it.author == newSelectedAuthor.author }
+                                    authorCommits = newAuthorCommits
+                                    // Update selected commit
+                                    selectedAuthorCommit = newAuthorCommits.firstOrNull()
                                 },
                                 itemContent = { item, selected ->
                                     Row(
@@ -291,14 +319,17 @@ class CommitListDialog(
                     }
                 }
                 
-                // Author details (bottom panel) - show commits by author
+                // Author details (bottom panel) - show commits by author with details
                 second {
                     Surface(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         if (selectedAuthor != null) {
-                            CommitsListWithDetails(
+                            // Use a specialized CommitsListWithSelection to ensure proper commit selection
+                            CommitsListWithSelection(
                                 commits = authorCommits,
+                                selectedCommit = selectedAuthorCommit,
+                                onCommitSelected = { selectedAuthorCommit = it },
                                 title = "Commits by ${selectedAuthor?.author} (${authorCommits.size})"
                             )
                         } else {
@@ -317,10 +348,291 @@ class CommitListDialog(
         commits: List<CommitInfo>,
         onCommitSelected: (CommitInfo) -> Unit
     ) {
-        CommitsListWithDetails(
+        var selectedTabCommit by remember { mutableStateOf<CommitInfo?>(commits.firstOrNull()) }
+        
+        // Initialize the selected commit if needed
+        LaunchedEffect(commits) {
+            if (selectedTabCommit == null && commits.isNotEmpty()) {
+                selectedTabCommit = commits.first()
+                onCommitSelected(commits.first())
+            } else if (commits.isNotEmpty() && (selectedTabCommit == null || !commits.contains(selectedTabCommit))) {
+                // If the currently selected commit is no longer in the list
+                selectedTabCommit = commits.first()
+                onCommitSelected(commits.first())
+            }
+        }
+        
+        CommitsListWithSelection(
             commits = commits,
+            selectedCommit = selectedTabCommit,
+            onCommitSelected = { 
+                selectedTabCommit = it
+                onCommitSelected(it)
+            },
             title = "All Commits (${commits.size})"
         )
+    }
+    
+    /**
+     * A version of CommitsListWithDetails that takes a selectedCommit and updates it
+     */
+    @OptIn(ExperimentalSplitPaneApi::class)
+    @Composable
+    private fun CommitsListWithSelection(
+        commits: List<CommitInfo>,
+        selectedCommit: CommitInfo?,
+        onCommitSelected: (CommitInfo) -> Unit,
+        title: String
+    ) {
+        var searchText by remember { mutableStateOf("") }
+        
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Optional title
+            if (title.isNotEmpty()) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+            
+            // Search field using our custom IntelliJ-style TextField
+            com.example.ijcommittracer.ui.components.IdeaTextField(
+                value = searchText,
+                onValueChange = { searchText = it },
+                placeholder = { Text(CommitTracerBundle.message("dialog.filter.search")) },
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+            )
+            
+            // Split pane - commits list and details
+            val splitPaneState = rememberSplitPaneState(0.6f)
+            HorizontalSplitPane(
+                splitPaneState = splitPaneState,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Commits list - left side
+                first {
+                    Surface(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        val filteredCommitsList = commits.filter { 
+                            searchText.isEmpty() || it.message.contains(searchText, ignoreCase = true) 
+                        }
+                        
+                        // Ensure we select a commit from the filtered list if needed
+                        LaunchedEffect(filteredCommitsList, selectedCommit) {
+                            if ((selectedCommit == null || !filteredCommitsList.contains(selectedCommit)) && filteredCommitsList.isNotEmpty()) {
+                                onCommitSelected(filteredCommitsList.first())
+                            }
+                        }
+                        
+                        Column {
+                            // Use our custom TableHeader component
+                            com.example.ijcommittracer.ui.components.TableHeader {
+                                com.example.ijcommittracer.ui.components.HeaderText(
+                                    "Message",
+                                    modifier = Modifier.weight(1f)
+                                )
+                                com.example.ijcommittracer.ui.components.HeaderText(
+                                    "Date",
+                                    modifier = Modifier.width(120.dp)
+                                )
+                                com.example.ijcommittracer.ui.components.HeaderText(
+                                    "Hash",
+                                    modifier = Modifier.width(80.dp)
+                                )
+                                com.example.ijcommittracer.ui.components.HeaderText(
+                                    "Tests",
+                                    modifier = Modifier.width(50.dp)
+                                )
+                            }
+                            
+                            // Using our custom IdeaSelectableList for better IntelliJ styling
+                            com.example.ijcommittracer.ui.components.IdeaSelectableList(
+                                items = filteredCommitsList,
+                                selectedItem = selectedCommit,
+                                onItemSelected = { newSelectedCommit ->
+                                    onCommitSelected(newSelectedCommit)
+                                },
+                                itemContent = { commit, selected ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            commit.message.lines().first(),
+                                            modifier = Modifier.weight(1f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            commit.date,
+                                            modifier = Modifier.width(120.dp)
+                                        )
+                                        Text(
+                                            commit.hash.take(7),
+                                            modifier = Modifier.width(80.dp)
+                                        )
+                                        
+                                        // Test indicator
+                                        // Check if any file paths contain test-related keywords
+                                        val hasTests = commit.changedFiles.any { file -> 
+                                            file.path.contains("test", ignoreCase = true) || 
+                                            file.path.contains("spec", ignoreCase = true)
+                                        }
+                                        val testIconColor = if (hasTests) 
+                                            com.example.ijcommittracer.ui.theme.IntelliJColors.Green 
+                                        else 
+                                            com.example.ijcommittracer.ui.theme.IntelliJColors.Red
+                                        
+                                        Text(
+                                            text = if (hasTests) "✓" else "✗",
+                                            color = testIconColor,
+                                            fontWeight = if (hasTests) FontWeight.Bold else FontWeight.Normal,
+                                            modifier = Modifier.width(50.dp),
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+                
+                // Commit details - right side
+                second {
+                    Surface(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        selectedCommit?.let { commit ->
+                            Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+                                Text(
+                                    CommitTracerBundle.message("dialog.commit.details"),
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                // Use our custom IdeaCard component for sectioned information
+                                com.example.ijcommittracer.ui.components.IdeaCard(
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        // Use our custom LabelWithValue component
+                                        com.example.ijcommittracer.ui.components.LabelWithValue("Repository", commit.repositoryName)
+                                        com.example.ijcommittracer.ui.components.LabelWithValue("Commit", commit.hash)
+                                        com.example.ijcommittracer.ui.components.LabelWithValue("Author", commit.author)
+                                        com.example.ijcommittracer.ui.components.LabelWithValue("Date", commit.date)
+                                        
+                                        if (commit.branches.isNotEmpty()) {
+                                            com.example.ijcommittracer.ui.components.LabelWithValue("Branch", commit.branches.joinToString(", "))
+                                        }
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Text("Message:", style = MaterialTheme.typography.titleSmall)
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                
+                                // Message with highlighted YouTrack tickets
+                                com.example.ijcommittracer.ui.components.IdeaCard(
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        buildAnnotatedString {
+                                            val matcher = youtrackTicketPattern.matcher(commit.message)
+                                            var lastEnd = 0
+                                            
+                                            while (matcher.find()) {
+                                                // Add text before the match
+                                                append(commit.message.substring(lastEnd, matcher.start()))
+                                                
+                                                // Add the ticket with bold style
+                                                pushStyle(SpanStyle(
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                ))
+                                                append(matcher.group(1))
+                                                pop()
+                                                
+                                                lastEnd = matcher.end()
+                                            }
+                                            
+                                            // Add remaining text
+                                            if (lastEnd < commit.message.length) {
+                                                append(commit.message.substring(lastEnd))
+                                            }
+                                        },
+                                        modifier = Modifier.padding(12.dp)
+                                    )
+                                }
+                                
+                                if (commit.changedFiles.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text("Changed Files (${commit.changedFiles.size}):", style = MaterialTheme.typography.titleSmall)
+                                    
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    
+                                    // Changed files list
+                                    com.example.ijcommittracer.ui.components.IdeaCard(
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        LazyColumn(
+                                            modifier = Modifier.heightIn(max = 200.dp)
+                                        ) {
+                                            val sortedFiles = commit.changedFiles.sortedWith(
+                                                compareByDescending<com.example.ijcommittracer.actions.ListCommitsAction.ChangedFileInfo> { it.isTestFile }
+                                                .thenBy { it.path.lowercase() }
+                                            )
+                                            
+                                            items(sortedFiles) { file ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    // Icon based on change type
+                                                    val changePrefix = when (file.changeType) {
+                                                        com.example.ijcommittracer.actions.ListCommitsAction.ChangeType.ADDED -> "[+] "
+                                                        com.example.ijcommittracer.actions.ListCommitsAction.ChangeType.DELETED -> "[-] "
+                                                        else -> "[M] "
+                                                    }
+                                                    
+                                                    // Use different color for test files
+                                                    val isTestFile = file.path.contains("test", ignoreCase = true) || 
+                                                                    file.path.contains("spec", ignoreCase = true)
+                                                    val textColor = if (isTestFile) 
+                                                        com.example.ijcommittracer.ui.theme.IntelliJColors.Green 
+                                                    else 
+                                                        LocalContentColor.current
+                                                    
+                                                    Text(
+                                                        text = "$changePrefix${file.path}",
+                                                        color = textColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                }
+                                                
+                                                if (sortedFiles.indexOf(file) < sortedFiles.size - 1) {
+                                                    Divider(modifier = Modifier.padding(horizontal = 8.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } ?: run {
+                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("Select a commit to view details")
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     
     @OptIn(ExperimentalSplitPaneApi::class)
@@ -596,6 +908,7 @@ class CommitListDialog(
         fromDate = newFromDate
         toDate = newToDate
         
+        // Actually call the refresh method to update the commits
         refreshCommitsWithDateFilter()
     }
     

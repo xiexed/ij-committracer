@@ -3,6 +3,7 @@ package com.example.ijcommittracer.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -16,6 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -149,6 +154,7 @@ fun IdeaCard(
 
 /**
  * A selectable list with styling similar to IntelliJ IDEA lists
+ * Supports keyboard navigation with up/down arrow keys
  */
 @Composable
 fun <T> IdeaSelectableList(
@@ -159,8 +165,50 @@ fun <T> IdeaSelectableList(
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
+    val focusManager = LocalFocusManager.current
+    
+    // Ensure the selected item is visible when it changes
+    LaunchedEffect(selectedItem) {
+        if (selectedItem != null) {
+            val index = items.indexOf(selectedItem)
+            if (index >= 0) {
+                listState.scrollToItem(index)
+            }
+        }
+    }
+    
+    // Handle keyboard navigation with onKeyEvent modifier
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                when (keyEvent.key) {
+                    Key.DirectionUp -> {
+                        val currentIndex = items.indexOf(selectedItem)
+                        if (currentIndex > 0) {
+                            onItemSelected(items[currentIndex - 1])
+                            // Scroll to keep the selected item visible
+                            kotlinx.coroutines.runBlocking {
+                                listState.scrollToItem(maxOf(0, currentIndex - 1))
+                            }
+                        }
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        val currentIndex = items.indexOf(selectedItem)
+                        if (currentIndex < items.size - 1) {
+                            onItemSelected(items[currentIndex + 1])
+                            // Scroll to keep the selected item visible
+                            kotlinx.coroutines.runBlocking {
+                                listState.scrollToItem(maxOf(0, currentIndex + 1))
+                            }
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            },
         state = listState
     ) {
         items(items) { item ->
