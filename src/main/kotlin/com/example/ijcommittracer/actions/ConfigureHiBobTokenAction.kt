@@ -33,19 +33,21 @@ class ConfigureHiBobTokenAction : AnAction() {
         
         val dialog = HiBobTokenDialog(project)
         if (dialog.showAndGet()) {
+            val serviceUserId = dialog.getServiceUserId()
             val token = dialog.getToken()
             val baseUrl = dialog.getBaseUrl()
             
-            if (token.isNotBlank()) {
+            if (token.isNotBlank() && serviceUserId.isNotBlank()) {
                 // Store the token securely in the background
                 kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                     val tokenStorage = TokenStorageService.getInstance(project)
                     tokenStorage.setHiBobToken(token)
+                    tokenStorage.setHiBobServiceUserId(serviceUserId)
                     tokenStorage.setHiBobBaseUrl(baseUrl)
                     
                     // Also update HiBobApiService for immediate use
                     val hibobService = HiBobApiService.getInstance(project)
-                    hibobService.setApiCredentials(token, baseUrl)
+                    hibobService.setApiCredentials(serviceUserId, token, baseUrl)
                     
                     // Switch to UI thread to show notification
                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -65,15 +67,17 @@ class ConfigureHiBobTokenAction : AnAction() {
      * Uses IntelliJ UI DSL and secure password field.
      */
     private class HiBobTokenDialog(project: Project) : DialogWrapper(project) {
+        private val serviceUserIdField = JBTextField()
         private val tokenField = JPasswordField()
         private val baseUrlField = JBTextField()
         
         init {
             title = "Configure HiBob API"
             
-            // Pre-populate the base URL if available
+            // Pre-populate fields if available
             val tokenStorage = TokenStorageService.getInstance(project)
             baseUrlField.text = tokenStorage.getHiBobBaseUrl()
+            serviceUserIdField.text = tokenStorage.getHiBobServiceUserId()
             
             init()
         }
@@ -83,6 +87,11 @@ class ConfigureHiBobTokenAction : AnAction() {
             mainPanel.preferredSize = Dimension(450, 150)
             
             val formPanel = panel {
+                row("HiBob Service User ID:") {
+                    cell(serviceUserIdField)
+                        .columns(30)
+                        .comment("Your HiBob service user ID")
+                }
                 row("HiBob API Token:") {
                     cell(tokenField)
                         .columns(30)
@@ -100,6 +109,8 @@ class ConfigureHiBobTokenAction : AnAction() {
             
             return mainPanel
         }
+        
+        fun getServiceUserId(): String = serviceUserIdField.text
         
         fun getToken(): String = String(tokenField.password)
         

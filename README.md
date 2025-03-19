@@ -32,11 +32,35 @@ YOUTRACK_API_TOKEN=your_youtrack_token_here
 YOUTRACK_API_URL=https://youtrack.jetbrains.com/api
 
 # HiBob API Configuration
+HIBOB_SERVICE_USER_ID=your_service_user_id_here
 HIBOB_API_TOKEN=your_hibob_token_here
 HIBOB_API_URL=https://api.hibob.com/v1
 ```
 
 The plugin will automatically detect and use these credentials if the file exists, falling back to the credential store if not found.
+
+## HiBob Integration Command-Line Tester
+
+For testing the HiBob API integration, the plugin includes an interactive command-line tool:
+
+1. Run the main method in `HiBobCliTester` class
+2. The tool provides an interactive menu to:
+   - Specify a custom .env file path
+   - Add email addresses to test
+   - View the configured test emails
+   - Run the integration test and view results
+
+Example usage with custom .env file and emails:
+```
+$ ./gradlew runIde
+
+# Then in HiBobCliTester:
+# 1. Choose option 1 to set .env path
+# 2. Choose option 2 to add emails to test
+# 3. Choose option 5 to run the test
+```
+
+The tester shows employee information including name, title, team, and manager for each email tested.
 
 ## Usage
 

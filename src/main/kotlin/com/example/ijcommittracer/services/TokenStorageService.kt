@@ -25,6 +25,7 @@ class TokenStorageService(private val project: Project) : PersistentStateCompone
     companion object {
         private const val YOUTRACK_TOKEN_KEY = "YOUTRACK_API_TOKEN"
         private const val HIBOB_TOKEN_KEY = "HIBOB_API_TOKEN"
+        private const val HIBOB_SERVICE_USER_ID_KEY = "HIBOB_SERVICE_USER_ID"
         private const val HIBOB_BASE_URL_KEY = "HIBOB_API_BASE_URL"
         
         @JvmStatic
@@ -36,7 +37,8 @@ class TokenStorageService(private val project: Project) : PersistentStateCompone
     // State class to persist non-sensitive settings
     data class State(
         var youTrackBaseUrl: String = "https://youtrack.jetbrains.com/api",
-        var hiBobBaseUrl: String = "https://api.hibob.com/v1"
+        var hiBobBaseUrl: String = "https://api.hibob.com/v1",
+        var hibobServiceUserId: String = ""
     )
     
     override fun getState(): State = myState
@@ -75,6 +77,12 @@ class TokenStorageService(private val project: Project) : PersistentStateCompone
     
     fun clearHiBobToken() {
         clearToken(HIBOB_TOKEN_KEY)
+    }
+    
+    fun getHiBobServiceUserId(): String = myState.hibobServiceUserId
+    
+    fun setHiBobServiceUserId(serviceUserId: String) {
+        myState.hibobServiceUserId = serviceUserId
     }
     
     fun getHiBobBaseUrl(): String = myState.hiBobBaseUrl

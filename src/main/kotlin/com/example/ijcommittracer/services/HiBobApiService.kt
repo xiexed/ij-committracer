@@ -26,6 +26,7 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
     
     // Constants for .env file properties
     private val HIBOB_API_TOKEN_KEY = "HIBOB_API_TOKEN"
+    private val HIBOB_SERVICE_USER_ID_KEY = "HIBOB_SERVICE_USER_ID"
     private val HIBOB_API_URL_KEY = "HIBOB_API_URL"
     private val DEFAULT_HIBOB_API_URL = "https://api.hibob.com/v1"
     
@@ -67,6 +68,7 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
         // If changedKeys is null, all keys are considered changed
         if (changedKeys == null || 
             changedKeys.contains(HIBOB_API_TOKEN_KEY) || 
+            changedKeys.contains(HIBOB_SERVICE_USER_ID_KEY) ||
             changedKeys.contains(HIBOB_API_URL_KEY)) {
             
             LOG.info("Detected environment changes affecting HiBob configuration")
@@ -84,7 +86,8 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
     /**
      * Set the API credentials.
      */
-    fun setApiCredentials(token: String, baseUrl: String = "https://api.hibob.com/v1") {
+    fun setApiCredentials(serviceUserId: String, token: String, baseUrl: String = "https://api.hibob.com/v1") {
+        tokenStorage.setHiBobServiceUserId(serviceUserId)
         tokenStorage.setHiBobToken(token)
         tokenStorage.setHiBobBaseUrl(baseUrl)
         
@@ -107,8 +110,19 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
             }
         }
         
-        // Try to get token from .env file first
-        val envToken = EnvFileReader.getInstance(project).getProperty(HIBOB_API_TOKEN_KEY)
+        // Try to get service user ID and token from .env file first
+        val envReader = EnvFileReader.getInstance(project)
+        val envServiceUserId = envReader.getProperty(HIBOB_SERVICE_USER_ID_KEY)
+        val envToken = envReader.getProperty(HIBOB_API_TOKEN_KEY)
+        
+        val serviceUserId = if (!envServiceUserId.isNullOrBlank()) {
+            LOG.info("Using HiBob service user ID from .env file")
+            envServiceUserId
+        } else {
+            // Fall back to tokenStorage
+            tokenStorage.getHiBobServiceUserId().takeIf { it.isNotBlank() } ?: return null
+        }
+        
         val token = if (!envToken.isNullOrBlank()) {
             LOG.info("Using HiBob API token from .env file")
             envToken
@@ -117,12 +131,12 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
             tokenStorage.getHiBobToken() ?: return null
         }
         
-        if (token.isBlank()) {
+        if (token.isBlank() || serviceUserId.isBlank()) {
             return null
         }
         
         return try {
-            fetchEmployeeFromApi(email, token)?.also { employeeInfo ->
+            fetchEmployeeFromApi(email, token, serviceUserId)?.also { employeeInfo ->
                 // Store in cache with timestamp
                 cache[email] = CachedEmployeeInfo(
                     info = employeeInfo,
@@ -154,12 +168,16 @@ class HiBobApiService(private val project: Project) : EnvChangeListener {
     /**
      * Fetch employee information from HiBob API.
      */
-    private fun fetchEmployeeFromApi(email: String, token: String): EmployeeInfo? {
+    private fun fetchEmployeeFromApi(email: String, token: String, serviceUserId: String): EmployeeInfo? {
         val baseUrl = apiBaseUrlRef.get() ?: refreshUrl().let { apiBaseUrlRef.get() }
+        
+        // Build Basic auth header
+        val credentials = "$serviceUserId:$token"
+        val encodedCredentials = java.util.Base64.getEncoder().encodeToString(credentials.toByteArray())
         
         val request = Request.Builder()
             .url("$baseUrl/people?email=$email")
-            .header("Authorization", "Bearer $token")
+            .header("Authorization", "Basic $encodedCredentials")
             .header("Accept", "application/json")
             .build()
         
