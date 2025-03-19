@@ -88,6 +88,12 @@
                     text="Clear HiBob API Token" 
                     description="Remove stored HiBob API token">
             </action>
+            
+            <action id="IjCommitTracer.TestHiBob" 
+                    class="com.example.ijcommittracer.actions.TestHiBobAction" 
+                    text="Test HiBob Integration" 
+                    description="Test HiBob API integration with sample emails">
+            </action>
         </group>
         
         <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
@@ -131,6 +137,12 @@
                     class="com.example.ijcommittracer.actions.ClearHiBobTokenAction" 
                     text="Clear HiBob API Token" 
                     description="Remove stored HiBob API token">
+            </action>
+            
+            <action id="IjCommitTracer.TestHiBobVcs" 
+                    class="com.example.ijcommittracer.actions.TestHiBobAction" 
+                    text="Test HiBob Integration" 
+                    description="Test HiBob API integration with sample emails">
             </action>
         </group>
         
