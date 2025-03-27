@@ -5,14 +5,20 @@ import com.intellij.credentialStore.CredentialAttributes
 import com.intellij.credentialStore.Credentials
 import com.intellij.credentialStore.generateServiceName
 import com.intellij.ide.passwordSafe.PasswordSafe
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.Disposer
 import com.intellij.util.io.HttpRequests
+import com.intellij.util.io.PersistentHashMap
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
 
 /**
  * Service for fetching issue information from YouTrack.
@@ -27,8 +33,75 @@ class YouTrackApiService(private val project: Project) {
     private val issueApiUrl = "$apiBaseUrl/issues"
     private val credentialKey = CommitTracerBundle.message("youtrack.credentials.key")
     
-    // Cache to avoid repeated API calls for the same ticket
-    private val ticketCache = mutableMapOf<String, TicketInfo>()
+    // In-memory cache to avoid repeated API calls during a session
+    private val sessionTicketCache = mutableMapOf<String, TicketInfo>()
+    
+    // Persistent cache for blocker and regression status
+    private var blockerStatusCache: PersistentHashMap<String, Boolean>? = null
+    private var regressionStatusCache: PersistentHashMap<String, Boolean>? = null
+    
+    init {
+        try {
+            initPersistentCaches()
+            // Register this service with the project's disposable to ensure cleanup
+            Disposer.register(project, { dispose() })
+        } catch (e: Exception) {
+            logger.error("Failed to initialize persistent caches", e)
+            // We'll continue without persistent caching if it fails
+        }
+    }
+    
+    /**
+     * Initialize persistent caches for blocker and regression status
+     */
+    private fun initPersistentCaches() {
+        val cacheDirPath = Paths.get(PathManager.getSystemPath(), "committracer-cache")
+        Files.createDirectories(cacheDirPath)
+        
+        try {
+            blockerStatusCache = PersistentHashMap(
+                cacheDirPath.resolve("blocker-status.dat"),
+                EnumeratorStringDescriptor,
+                BooleanDataExternalizer
+            )
+            
+            regressionStatusCache = PersistentHashMap(
+                cacheDirPath.resolve("regression-status.dat"),
+                EnumeratorStringDescriptor,
+                BooleanDataExternalizer
+            )
+        } catch (e: IOException) {
+            // If cache files are corrupted, delete them and try again
+            logger.warn("Cache files may be corrupted, recreating them", e)
+            try {
+                // Close any open caches first
+                blockerStatusCache?.close()
+                regressionStatusCache?.close()
+                
+                // Delete the corrupt files
+                Files.deleteIfExists(cacheDirPath.resolve("blocker-status.dat"))
+                Files.deleteIfExists(cacheDirPath.resolve("regression-status.dat"))
+                
+                // Recreate the caches
+                blockerStatusCache = PersistentHashMap(
+                    cacheDirPath.resolve("blocker-status.dat"),
+                    EnumeratorStringDescriptor,
+                    BooleanDataExternalizer
+                )
+                
+                regressionStatusCache = PersistentHashMap(
+                    cacheDirPath.resolve("regression-status.dat"),
+                    EnumeratorStringDescriptor,
+                    BooleanDataExternalizer
+                )
+            } catch (ex: IOException) {
+                logger.error("Failed to recreate persistent caches", ex)
+                // Disable persistent caching
+                blockerStatusCache = null
+                regressionStatusCache = null
+            }
+        }
+    }
 
     /**
      * Fetches ticket information for a specific issue ID.
@@ -44,8 +117,8 @@ class YouTrackApiService(private val project: Project) {
             return null
         }
         
-        // Cache for ticket info to avoid repeated API calls
-        val cachedInfo = ticketCache[issueId]
+        // Check in-memory cache first
+        val cachedInfo = sessionTicketCache[issueId]
         if (cachedInfo != null) {
             return cachedInfo
         }
@@ -65,8 +138,25 @@ class YouTrackApiService(private val project: Project) {
                         HttpURLConnection.HTTP_OK -> {
                             val responseText = request.readString()
                             val ticketInfo = parseTicketResponse(responseText)
-                            // Cache the result
-                            ticketCache[issueId] = ticketInfo
+                            
+                            // Cache the result in memory
+                            sessionTicketCache[issueId] = ticketInfo
+                            
+                            // Cache blocker and regression status persistently
+                            try {
+                                val isBlocker = ticketInfo.tags.any { tag -> tag.startsWith("blocking-") }
+                                val isRegression = ticketInfo.tags.any { tag -> 
+                                    tag.lowercase().contains("regression") 
+                                } || ticketInfo.summary.lowercase().contains("regression")
+                                
+                                // Update persistent caches safely
+                                updateBlockerCache(issueId, isBlocker)
+                                updateRegressionCache(issueId, isRegression)
+                            } catch (e: Exception) {
+                                logger.warn("Failed to update persistent cache", e)
+                                // Continue without updating the cache
+                            }
+                            
                             ticketInfo
                         }
                         HttpURLConnection.HTTP_UNAUTHORIZED, HttpURLConnection.HTTP_FORBIDDEN -> {
@@ -88,6 +178,101 @@ class YouTrackApiService(private val project: Project) {
         } catch (e: IOException) {
             logger.warn(CommitTracerBundle.message("youtrack.error.connection"), e)
             return null
+        }
+    }
+    
+    /**
+     * Checks if a ticket is a blocker based on cached data or API call
+     * 
+     * @param issueId The ID of the issue to check
+     * @return true if the issue is a blocker, false otherwise
+     */
+    fun isBlockerTicket(issueId: String): Boolean {
+        // Check persistent cache first
+        return try {
+            if (blockerStatusCache?.containsMapping(issueId) == true) {
+                blockerStatusCache?.get(issueId) ?: false
+            } else {
+                // Fetch from API if not in cache
+                val ticketInfo = fetchTicketInfo(issueId)
+                val isBlocker = ticketInfo?.tags?.any { tag -> tag.startsWith("blocking-") } ?: false
+                
+                // Update cache
+                updateBlockerCache(issueId, isBlocker)
+                
+                isBlocker
+            }
+        } catch (e: Exception) {
+            logger.warn("Error checking blocker status for $issueId", e)
+            // Fallback to API call
+            val ticketInfo = fetchTicketInfo(issueId)
+            ticketInfo?.tags?.any { tag -> tag.startsWith("blocking-") } ?: false
+        }
+    }
+    
+    /**
+     * Checks if a ticket is a regression based on cached data or API call
+     * 
+     * @param issueId The ID of the issue to check
+     * @return true if the issue is a regression, false otherwise
+     */
+    fun isRegressionTicket(issueId: String): Boolean {
+        // Check persistent cache first
+        return try {
+            if (regressionStatusCache?.containsMapping(issueId) == true) {
+                regressionStatusCache?.get(issueId) ?: false
+            } else {
+                // Fetch from API if not in cache
+                val ticketInfo = fetchTicketInfo(issueId)
+                val isRegression = ticketInfo?.tags?.any { tag -> 
+                    tag.lowercase().contains("regression") 
+                } ?: false || ticketInfo?.summary?.lowercase()?.contains("regression") ?: false
+                
+                // Update cache
+                updateRegressionCache(issueId, isRegression)
+                
+                isRegression
+            }
+        } catch (e: Exception) {
+            logger.warn("Error checking regression status for $issueId", e)
+            // Fallback to API call
+            val ticketInfo = fetchTicketInfo(issueId)
+            (ticketInfo?.tags?.any { tag -> tag.lowercase().contains("regression") } ?: false) || 
+            (ticketInfo?.summary?.lowercase()?.contains("regression") ?: false)
+        }
+    }
+    
+    /**
+     * Safely update the blocker cache
+     */
+    private fun updateBlockerCache(issueId: String, isBlocker: Boolean) {
+        try {
+            blockerStatusCache?.let { cache ->
+                if (isBlocker) {
+                    cache.put(issueId, true)
+                } else if (!cache.containsMapping(issueId)) {
+                    cache.put(issueId, false)
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to update blocker cache for $issueId", e)
+        }
+    }
+    
+    /**
+     * Safely update the regression cache
+     */
+    private fun updateRegressionCache(issueId: String, isRegression: Boolean) {
+        try {
+            regressionStatusCache?.let { cache ->
+                if (isRegression) {
+                    cache.put(issueId, true)
+                } else if (!cache.containsMapping(issueId)) {
+                    cache.put(issueId, false)
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to update regression cache for $issueId", e)
         }
     }
     
@@ -212,4 +397,66 @@ class YouTrackApiService(private val project: Project) {
         val summary: String,
         val tags: List<String>
     )
+    
+    /**
+     * This method must be called when the plugin is being unloaded
+     * to ensure proper cleanup of resources.
+     */
+    fun dispose() {
+        try {
+            blockerStatusCache?.apply {
+                force()
+                close()
+            }
+            regressionStatusCache?.apply {
+                force()
+                close()
+            }
+            logger.info("YouTrack cache resources released")
+        } catch (e: Exception) {
+            logger.warn("Error closing YouTrack caches", e)
+        }
+    }
+    
+    /**
+     * Force flush the cache to disk
+     */
+    fun flushCaches() {
+        try {
+            blockerStatusCache?.force()
+            regressionStatusCache?.force()
+        } catch (e: Exception) {
+            logger.warn("Error flushing caches to disk", e)
+        }
+    }
+    
+    /**
+     * Helper class for serializing boolean values in PersistentHashMap
+     */
+    private object BooleanDataExternalizer : com.intellij.util.io.DataExternalizer<Boolean> {
+        override fun save(out: java.io.DataOutput, value: Boolean) {
+            out.writeBoolean(value)
+        }
+        
+        override fun read(input: java.io.DataInput): Boolean {
+            return input.readBoolean()
+        }
+    }
+    
+    /**
+     * Helper class for serializing string keys in PersistentHashMap
+     */
+    private object EnumeratorStringDescriptor : com.intellij.util.io.KeyDescriptor<String> {
+        override fun getHashCode(value: String): Int = value.hashCode()
+        
+        override fun isEqual(val1: String, val2: String): Boolean = val1 == val2
+        
+        override fun save(out: java.io.DataOutput, value: String) {
+            out.writeUTF(value)
+        }
+        
+        override fun read(input: java.io.DataInput): String {
+            return input.readUTF()
+        }
+    }
 }

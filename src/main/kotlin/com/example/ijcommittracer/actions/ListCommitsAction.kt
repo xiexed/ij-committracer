@@ -167,25 +167,23 @@ class ListCommitsAction : AnAction(), DumbAware {
             val updatedBlockerTickets = stats.blockerTickets.toMutableMap()
             val updatedRegressionTickets = stats.regressionTickets.toMutableMap()
             
+            // Get YouTrack service once for efficiency
+            val youTrackService = project.getService(com.example.ijcommittracer.services.YouTrackApiService::class.java)
+            
             tickets.forEach { ticket ->
                 val ticketCommits = updatedTickets.getOrPut(ticket) { mutableListOf() }
                 ticketCommits.add(commit)
                 
-                // Check if this ticket is a blocker or regression by fetching ticket info from YouTrack
-                val ticketInfo = project.getService(com.example.ijcommittracer.services.YouTrackApiService::class.java).fetchTicketInfo(ticket)
-                if (ticketInfo != null) {
-                    // Check for blocker tags
-                    if (ticketInfo.tags.any { tag -> tag.startsWith("blocking-") }) {
-                        val blockerCommits = updatedBlockerTickets.getOrPut(ticket) { mutableListOf() }
-                        blockerCommits.add(commit)
-                    }
-                    
-                    // Check for regression in tags or summary (case insensitive)
-                    if (ticketInfo.tags.any { tag -> tag.lowercase().contains("regression") } || 
-                        ticketInfo.summary.lowercase().contains("regression")) {
-                        val regressionCommits = updatedRegressionTickets.getOrPut(ticket) { mutableListOf() }
-                        regressionCommits.add(commit)
-                    }
+                // Use cached methods to check if this ticket is a blocker or regression
+                if (youTrackService.isBlockerTicket(ticket)) {
+                    val blockerCommits = updatedBlockerTickets.getOrPut(ticket) { mutableListOf() }
+                    blockerCommits.add(commit)
+                }
+                
+                // Use cached method to check for regression status
+                if (youTrackService.isRegressionTicket(ticket)) {
+                    val regressionCommits = updatedRegressionTickets.getOrPut(ticket) { mutableListOf() }
+                    regressionCommits.add(commit)
                 }
             }
 
