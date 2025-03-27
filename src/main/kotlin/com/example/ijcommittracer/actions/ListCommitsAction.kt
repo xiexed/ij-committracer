@@ -237,6 +237,11 @@ class ListCommitsAction : AnAction(), DumbAware {
      * @return true if the path looks like a test file, false otherwise
      */
     private fun isTestFile(path: String): Boolean {
+        // Exclude *.iml and *.bazel files
+        if (path.endsWith(".iml") || path.endsWith(".bazel")) {
+            return false
+        }
+        
         return path.contains("/test/") || 
                path.contains("/tests/") || 
                path.contains("Test.") || 
