@@ -13,9 +13,8 @@ An IntelliJ IDEA plugin that analyzes Git commit history and integrates with You
 
 ## Installation
 
-1. Download the plugin from the JetBrains Marketplace
-2. Install via IntelliJ IDEA: Settings/Preferences → Plugins → Install from disk
-3. Restart IntelliJ IDEA
+1. Install via IntelliJ IDEA: Settings/Preferences → Plugins → Install from disk
+2. Restart IntelliJ IDEA
 
 ## Configuration
 
