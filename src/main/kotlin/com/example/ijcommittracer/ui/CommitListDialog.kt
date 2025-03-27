@@ -9,6 +9,7 @@ import com.example.ijcommittracer.ui.components.CommitsPanel
 import com.example.ijcommittracer.ui.components.DateFilterPanel
 import com.example.ijcommittracer.ui.models.AuthorTableModel
 import com.example.ijcommittracer.ui.models.CommitTableModel
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
@@ -54,6 +55,12 @@ class CommitListDialog(
     // Pattern for YouTrack ticket references
     // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
     private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)")
+
+    companion object {
+        // Property keys for persisting date filters
+        const val FROM_DATE_KEY = "com.example.ijcommittracer.fromDate"
+        const val TO_DATE_KEY = "com.example.ijcommittracer.toDate"
+    }
 
     init {
         title = CommitTracerBundle.message("dialog.commits.title")
@@ -109,7 +116,12 @@ class CommitListDialog(
         // Update date range and refresh commits
         fromDate = newFromDate
         toDate = newToDate
-        
+
+        // Save the date filter values to persist them between dialog invocations
+        val properties = PropertiesComponent.getInstance()
+        properties.setValue(FROM_DATE_KEY, fromDate.time.toString())
+        properties.setValue(TO_DATE_KEY, toDate.time.toString())
+
         refreshCommitsWithDateFilter()
     }
     

@@ -4,6 +4,7 @@ import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.services.NotificationService
 import com.example.ijcommittracer.ui.CommitListDialog
 import com.example.ijcommittracer.ui.SelectRepositoryDialog
+import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -53,14 +54,40 @@ class ListCommitsAction : AnAction(), DumbAware {
         } else {
             repositories.first()
         }
-        
-        // Get default date range (today to 365 days ago)
+
+        // Check if we have persisted date filters
+        val properties = PropertiesComponent.getInstance()
+        val fromDateStr = properties.getValue(CommitListDialog.FROM_DATE_KEY)
+        val toDateStr = properties.getValue(CommitListDialog.TO_DATE_KEY)
+
+        // Default date range (today to 1 month ago)
         val today = Calendar.getInstance()
-        val oneYearAgo = Calendar.getInstance()
-        oneYearAgo.add(Calendar.MONTH, -1)
+        val oneMonthAgo = Calendar.getInstance()
+        oneMonthAgo.add(Calendar.MONTH, -1)
+
+        // Use persisted dates if available, otherwise use defaults
+        val fromDate = if (fromDateStr != null) {
+            try {
+                Date(fromDateStr.toLong())
+            } catch (e: NumberFormatException) {
+                oneMonthAgo.time
+            }
+        } else {
+            oneMonthAgo.time
+        }
+
+        val toDate = if (toDateStr != null) {
+            try {
+                Date(toDateStr.toLong())
+            } catch (e: NumberFormatException) {
+                today.time
+            }
+        } else {
+            today.time
+        }
 
         // Load commits from the selected repository with date range
-        loadCommits(project, selectedRepository, oneYearAgo.time, today.time)
+        loadCommits(project, selectedRepository, fromDate, toDate)
     }
     
     private fun loadCommits(project: Project, repository: GitRepository, fromDate: Date, toDate: Date) {
@@ -217,7 +244,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         // and updating UI visibility - these are lightweight operations
         return ActionUpdateThread.EDT
     }
-    
+
     private fun hasGitRepository(project: Project): Boolean {
         val vcsManager = ProjectLevelVcsManager.getInstance(project)
         return vcsManager.allVcsRoots.isNotEmpty() && 
@@ -239,7 +266,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         if (path.endsWith(".iml") || path.endsWith(".bazel")) {
             return false
         }
-        
+
         return path.contains("/test/") || 
                path.contains("/tests/") || 
                path.contains("Test.") || 
