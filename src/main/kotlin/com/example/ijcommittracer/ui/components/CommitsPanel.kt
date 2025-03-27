@@ -27,7 +27,8 @@ class CommitsPanel(private val commits: List<CommitInfo>) : JPanel(BorderLayout(
     
     private lateinit var commitsTable: JBTable
     private val filteredCommits: List<CommitInfo> = commits
-    private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)") // Pattern for YouTrack ticket references
+    // Pattern for YouTrack ticket references - excluding CR-, MR-, and EA- prefixes
+    private val youtrackTicketPattern = Pattern.compile("\\b(?!CR-|MR-|EA-)([A-Z]+-\\d+)\\b")
     
     init {
         initialize()

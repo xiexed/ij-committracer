@@ -156,7 +156,7 @@ class ListCommitsAction : AnAction(), DumbAware {
     companion object {
         // Pattern for YouTrack ticket references
         // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
-        private val youtrackTicketPattern = Regex("\\b(?!MR-|CR-|EA-[A-Z]+-\\d+)[A-Z]+-\\d+\\b")
+        private val youtrackTicketPattern = Regex("\\b(?!MR-|CR-|EA-)([A-Z]+-\\d+)\\b")
 
         /**
          * Extracts YouTrack ticket IDs from commit message

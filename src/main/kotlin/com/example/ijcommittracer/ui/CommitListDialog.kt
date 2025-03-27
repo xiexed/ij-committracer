@@ -57,7 +57,8 @@ class CommitListDialog(
     
     // Pattern for YouTrack ticket references
     // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
-    private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)")
+    // Excludes CR-, MR-, and EA- prefixes
+    private val youtrackTicketPattern = Pattern.compile("\\b(?!CR-|MR-|EA-)([A-Z]+-\\d+)\\b")
 
     companion object {
         // Property keys for persisting date filters
