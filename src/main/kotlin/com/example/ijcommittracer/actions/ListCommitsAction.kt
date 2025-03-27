@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit
  */
 class ListCommitsAction : AnAction(), DumbAware {
 
+
     private lateinit var project: Project
 
     override fun actionPerformed(e: AnActionEvent) {
@@ -123,6 +124,8 @@ class ListCommitsAction : AnAction(), DumbAware {
         })
     }
 
+
+
     companion object {
         // Pattern for YouTrack ticket references
         // Matches project code in capital letters, followed by a hyphen, followed by numbers (e.g. IDEA-12345)
@@ -142,17 +145,12 @@ class ListCommitsAction : AnAction(), DumbAware {
     private fun aggregateByAuthor(commits: List<CommitInfo>): Map<String, AuthorStats> {
         val project = this.project
         val authorMap = mutableMapOf<String, AuthorStats>()
-        val hibobService = project.getService(com.example.ijcommittracer.services.HiBobApiService::class.java)
 
         commits.forEach { commit ->
             val author = commit.author
             val tickets = extractYouTrackTickets(commit.message)
 
-            // Get existing stats or create new ones
             val stats = authorMap.getOrPut(author) {
-                // Get employee info from HiBob
-                val employeeInfo = hibobService.getEmployeeByEmail(author)
-                
                 AuthorStats(
                     author = author,
                     commitCount = 0,
@@ -160,10 +158,7 @@ class ListCommitsAction : AnAction(), DumbAware {
                     lastCommitDate = commit.dateObj,
                     youTrackTickets = mutableMapOf(),
                     blockerTickets = mutableMapOf(),
-                    regressionTickets = mutableMapOf(),
-                    teamName = employeeInfo?.team ?: "",
-                    displayName = employeeInfo?.name ?: "",
-                    title = employeeInfo?.title ?: ""
+                    regressionTickets = mutableMapOf()
                 )
             }
 
@@ -396,10 +391,7 @@ class ListCommitsAction : AnAction(), DumbAware {
         val youTrackTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
         val blockerTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
         val regressionTickets: Map<String, MutableList<CommitInfo>> = emptyMap(),
-        val testTouchedCount: Int = 0,
-        val teamName: String = "",
-        val displayName: String = "",
-        val title: String = ""
+        val testTouchedCount: Int = 0
     ) {
         /**
          * Get active days between first and last commit.

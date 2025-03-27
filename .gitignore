@@ -9,18 +9,12 @@ build/
 .idea/jarRepositories.xml
 .idea/compiler.xml
 .idea/libraries/
-.idea/.name
 *.iws
 *.iml
 *.ipr
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
-.intellijPlatform/
-
-# Environment files with credentials
-.env
-.env.*
 
 ### Eclipse ###
 .apt_generated

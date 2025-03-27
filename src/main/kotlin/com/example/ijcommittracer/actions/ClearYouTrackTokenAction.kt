@@ -9,10 +9,6 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Action for clearing stored YouTrack authentication token.
@@ -33,22 +29,15 @@ class ClearYouTrackTokenAction : AnAction(), DumbAware {
         )
         
         if (result == Messages.YES) {
-            // Get YouTrack service and clear token in the background
+            // Get YouTrack service and clear token
             val youTrackService = project.service<YouTrackApiService>()
+            youTrackService.clearToken()
             
-            // Clear token in background thread to avoid slow operations on EDT
-            kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                youTrackService.clearToken()
-                
-                // Show notification on UI thread after clearing
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    NotificationService.showInfo(
-                        project,
-                        CommitTracerBundle.message("youtrack.token.cleared"),
-                        CommitTracerBundle.message("dialog.youtrack.auth")
-                    )
-                }
-            }
+            NotificationService.showInfo(
+                project,
+                CommitTracerBundle.message("youtrack.token.cleared"),
+                CommitTracerBundle.message("dialog.youtrack.auth")
+            )
         }
     }
     

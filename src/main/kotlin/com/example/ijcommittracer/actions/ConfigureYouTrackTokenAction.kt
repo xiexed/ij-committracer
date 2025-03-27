@@ -11,10 +11,6 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.DumbAware
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Action for configuring YouTrack authentication token.
@@ -53,19 +49,13 @@ class ConfigureYouTrackTokenAction : AnAction(), DumbAware {
             
             override fun onSuccess() {
                 if (isValid) {
-                    // Token is valid, store it in the background to avoid slow operations on EDT
-                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                        youTrackService.storeToken(token)
-                        
-                        // Show notification on UI thread after storing
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            NotificationService.showInfo(
-                                project,
-                                CommitTracerBundle.message("youtrack.token.stored"),
-                                CommitTracerBundle.message("dialog.youtrack.auth")
-                            )
-                        }
-                    }
+                    // Token is valid, store it
+                    youTrackService.storeToken(token)
+                    NotificationService.showInfo(
+                        project,
+                        CommitTracerBundle.message("youtrack.token.stored"),
+                        CommitTracerBundle.message("dialog.youtrack.auth")
+                    )
                 } else {
                     NotificationService.showError(
                         project,

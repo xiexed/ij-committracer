@@ -1,253 +1,204 @@
 package com.example.ijcommittracer.ui.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.example.ijcommittracer.CommitTracerBundle
 import com.example.ijcommittracer.actions.ListCommitsAction.CommitInfo
+import com.example.ijcommittracer.ui.models.CommitTableModel
+import com.intellij.ui.JBColor
+import com.intellij.ui.OnePixelSplitter
+import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.table.JBTable
+import com.intellij.util.ui.JBUI
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Font
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.regex.Pattern
+import javax.swing.*
+import javax.swing.event.DocumentListener
+import javax.swing.table.DefaultTableCellRenderer
+import javax.swing.table.TableRowSorter
 
 /**
- * Composable for displaying Git commits
+ * Panel for displaying Git commits.
  */
-@Composable
-fun CommitsPanel(
-    commits: List<CommitInfo>,
-    onCommitSelected: (CommitInfo) -> Unit
-) {
-    var searchText by remember { mutableStateOf("") }
-    var selectedCommit by remember { mutableStateOf<CommitInfo?>(null) }
-    val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)") // Pattern for YouTrack ticket references
+class CommitsPanel(private val commits: List<CommitInfo>) : JPanel(BorderLayout()) {
     
-    // Initialize selected commit if not already set
-    LaunchedEffect(commits) {
-        if (selectedCommit == null && commits.isNotEmpty()) {
-            selectedCommit = commits.first()
-            onCommitSelected(commits.first())
+    private lateinit var commitsTable: JBTable
+    private val filteredCommits: List<CommitInfo> = commits
+    private val youtrackTicketPattern = Pattern.compile("([A-Z]+-\\d+)") // Pattern for YouTrack ticket references
+    
+    init {
+        initialize()
+    }
+    
+    private fun initialize() {
+        // Create filter panel at the top
+        val filterPanel = JPanel(BorderLayout())
+        filterPanel.border = JBUI.Borders.emptyBottom(5)
+        
+        val searchLabel = JBLabel(CommitTracerBundle.message("dialog.filter.search"))
+        searchLabel.border = JBUI.Borders.empty(0, 5)
+        filterPanel.add(searchLabel, BorderLayout.WEST)
+        
+        val searchField = JTextField().apply {
+            // Add clear button (X) with escape key handler to clear the field
+            addKeyListener(object : java.awt.event.KeyAdapter() {
+                override fun keyPressed(e: java.awt.event.KeyEvent) {
+                    if (e.keyCode == java.awt.event.KeyEvent.VK_ESCAPE) {
+                        text = ""
+                    }
+                }
+            })
+        }
+        filterPanel.add(searchField, BorderLayout.CENTER)
+        add(filterPanel, BorderLayout.NORTH)
+        
+        // Create table with commits
+        val tableModel = CommitTableModel(filteredCommits)
+        commitsTable = JBTable(tableModel).apply {
+            setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
+            columnModel.getColumn(0).preferredWidth = 450 // Message
+            columnModel.getColumn(1).preferredWidth = 120 // Date (dd/MM/yy, HH:mm)
+            columnModel.getColumn(2).preferredWidth = 80  // Hash (7 chars + potential *)
+            columnModel.getColumn(3).preferredWidth = 50  // Tests
+            
+            // Create a custom renderer for the Tests column with green/red icons
+            val testsRenderer = object : DefaultTableCellRenderer() {
+                override fun getTableCellRendererComponent(
+                    table: JTable, value: Any, isSelected: Boolean, hasFocus: Boolean, row: Int, column: Int
+                ): Component {
+                    val label = super.getTableCellRendererComponent(table, "", isSelected, hasFocus, row, column) as JLabel
+                    label.horizontalAlignment = SwingConstants.CENTER
+                    
+                    if (value == true) {
+                        // Green checkmark for test touches
+                        label.text = "✓"
+                        label.foreground = JBColor.GREEN
+                        label.font = label.font.deriveFont(Font.BOLD)
+                    } else {
+                        // Red X for no test touches
+                        label.text = "✗"
+                        label.foreground = JBColor.RED
+                    }
+                    
+                    return label
+                }
+            }
+            columnModel.getColumn(3).cellRenderer = testsRenderer
+            
+            // Add row sorter for sorting
+            val sorter = TableRowSorter(tableModel)
+            
+            // Set comparator for the date column to sort by date
+            sorter.setComparator(1, Comparator<String> { date1, date2 ->
+                try {
+                    // Create a format parser for the displayed date format
+                    val dateFormat = SimpleDateFormat("dd/MM/yy, HH:mm", Locale.US)
+                    val d1 = dateFormat.parse(date1)
+                    val d2 = dateFormat.parse(date2)
+                    d1.compareTo(d2)
+                } catch (e: Exception) {
+                    date1.compareTo(date2)
+                }
+            })
+            
+            rowSorter = sorter
+            
+            // Add document listener to filter table when text changes
+            searchField.document.addDocumentListener(object : DocumentListener {
+                override fun insertUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun removeUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                override fun changedUpdate(e: javax.swing.event.DocumentEvent) = filterTable()
+                
+                private fun filterTable() {
+                    val text = searchField.text
+                    if (text.isNullOrBlank()) {
+                        sorter.rowFilter = null
+                    } else {
+                        try {
+                            // Create case-insensitive regex filter for message column (0)
+                            sorter.rowFilter = RowFilter.regexFilter("(?i)" + text, 0)
+                        } catch (ex: java.util.regex.PatternSyntaxException) {
+                            // If the regex pattern is invalid, just show all rows
+                            sorter.rowFilter = null
+                        }
+                    }
+                }
+            })
+        }
+        
+        // Create detail panel for selected commit
+        val detailsPanel = JPanel(BorderLayout())
+        val detailsHeaderLabel = JBLabel(CommitTracerBundle.message("dialog.commit.details"))
+        detailsHeaderLabel.border = JBUI.Borders.empty(5, 5, 0, 5)
+        detailsPanel.add(detailsHeaderLabel, BorderLayout.NORTH)
+        
+        val detailsArea = JTextArea().apply {
+            isEditable = false
+            lineWrap = true
+            wrapStyleWord = true
+            border = JBUI.Borders.empty(5)
+        }
+        detailsPanel.add(JBScrollPane(detailsArea), BorderLayout.CENTER)
+        
+        // Add selection listener to show details
+        commitsTable.selectionModel.addListSelectionListener { e ->
+            if (!e.valueIsAdjusting) {
+                val selectedRow = commitsTable.selectedRow
+                if (selectedRow >= 0) {
+                    val modelRow = commitsTable.convertRowIndexToModel(selectedRow)
+                    val commit = filteredCommits[modelRow]
+                    
+                    // Highlight YouTrack tickets in the commit message
+                    val message = highlightYouTrackTickets(commit.message)
+                    
+                    detailsArea.text = buildString {
+                        append(CommitTracerBundle.message("dialog.repository.label", commit.repositoryName))
+                        append("\n")
+                        append("Commit: ${commit.hash}\n")
+                        append("Author: ${commit.author}\n")
+                        append("Date: ${commit.date}\n")
+                        
+                        // Add branches if available
+                        if (commit.branches.isNotEmpty()) {
+                            append(CommitTracerBundle.message("dialog.branch.label", commit.branches.joinToString(", ")))
+                            append("\n")
+                        }
+                        
+                        append("\nMessage:\n$message")
+                    }
+                    detailsArea.caretPosition = 0
+                }
+            }
+        }
+        
+        // Split view: table on top, details below
+        val splitPane = OnePixelSplitter(true, 0.6f)
+        splitPane.firstComponent = JBScrollPane(commitsTable)
+        splitPane.secondComponent = detailsPanel
+        
+        add(splitPane, BorderLayout.CENTER)
+        
+        // Select first row by default if there are commits
+        if (filteredCommits.isNotEmpty()) {
+            commitsTable.selectionModel.setSelectionInterval(0, 0)
         }
     }
     
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Search field
-        OutlinedTextField(
-            value = searchText,
-            onValueChange = { searchText = it },
-            label = { Text(CommitTracerBundle.message("dialog.filter.search")) },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-        )
-        
-        // Split pane - commits list and details
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Commits list - 60% width
-            Surface(
-                modifier = Modifier.weight(0.6f).fillMaxHeight(),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                val filteredCommitsList = commits.filter { 
-                    searchText.isEmpty() || it.message.contains(searchText, ignoreCase = true) 
-                }
-                
-                LazyColumn {
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(8.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                "Message",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                "Date",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.width(120.dp)
-                            )
-                            Text(
-                                "Hash",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.width(80.dp)
-                            )
-                            Text(
-                                "Tests",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.width(50.dp),
-                                maxLines = 1
-                            )
-                        }
-                        Divider()
-                    }
-                    
-                    items(filteredCommitsList) { commit ->
-                        val isSelected = selectedCommit == commit
-                        
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = if (isSelected) 
-                                MaterialTheme.colorScheme.primaryContainer 
-                            else 
-                                MaterialTheme.colorScheme.surface,
-                            onClick = { 
-                                selectedCommit = commit
-                                onCommitSelected(commit)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    commit.message.lines().first(),
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    commit.date,
-                                    modifier = Modifier.width(120.dp)
-                                )
-                                Text(
-                                    commit.hash.take(7),
-                                    modifier = Modifier.width(80.dp)
-                                )
-                                
-                                // Test indicator
-                                val hasTests = commit.changedFiles.any { it.isTestFile }
-                                Text(
-                                    text = if (hasTests) "✓" else "✗",
-                                    color = if (hasTests) Color.Green else Color.Red,
-                                    fontWeight = if (hasTests) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier.width(50.dp),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                        Divider()
-                    }
-                }
-            }
-            
-            // Divider
-            Divider(modifier = Modifier.fillMaxHeight().width(1.dp))
-            
-            // Commit details - 40% width
-            Surface(
-                modifier = Modifier.weight(0.4f).fillMaxHeight(),
-                color = MaterialTheme.colorScheme.surface
-            ) {
-                selectedCommit?.let { commit ->
-                    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                        Text(
-                            CommitTracerBundle.message("dialog.commit.details"),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text("Repository: ${commit.repositoryName}")
-                        Text("Commit: ${commit.hash}")
-                        Text("Author: ${commit.author}")
-                        Text("Date: ${commit.date}")
-                        
-                        if (commit.branches.isNotEmpty()) {
-                            Text("Branch: ${commit.branches.joinToString(", ")}")
-                        }
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Text("Message:", style = MaterialTheme.typography.titleSmall)
-                        
-                        Spacer(modifier = Modifier.height(4.dp))
-                        
-                        // Message with highlighted YouTrack tickets
-                        Text(buildAnnotatedString {
-                            val matcher = youtrackTicketPattern.matcher(commit.message)
-                            var lastEnd = 0
-                            
-                            while (matcher.find()) {
-                                // Add text before the match
-                                append(commit.message.substring(lastEnd, matcher.start()))
-                                
-                                // Add the ticket with bold style
-                                pushStyle(SpanStyle(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                ))
-                                append(matcher.group(1))
-                                pop()
-                                
-                                lastEnd = matcher.end()
-                            }
-                            
-                            // Add remaining text
-                            if (lastEnd < commit.message.length) {
-                                append(commit.message.substring(lastEnd))
-                            }
-                        })
-                        
-                        if (commit.changedFiles.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text("Changed Files (${commit.changedFiles.size}):", style = MaterialTheme.typography.titleSmall)
-                            
-                            Spacer(modifier = Modifier.height(4.dp))
-                            
-                            // Changed files list
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                LazyColumn(
-                                    modifier = Modifier.heightIn(max = 200.dp)
-                                ) {
-                                    val sortedFiles = commit.changedFiles.sortedWith(
-                                        compareByDescending<com.example.ijcommittracer.actions.ListCommitsAction.ChangedFileInfo> { it.isTestFile }
-                                        .thenBy { it.path.lowercase() }
-                                    )
-                                    
-                                    items(sortedFiles) { file ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            // Icon based on change type
-                                            val changePrefix = when (file.changeType) {
-                                                com.example.ijcommittracer.actions.ListCommitsAction.ChangeType.ADDED -> "[+] "
-                                                com.example.ijcommittracer.actions.ListCommitsAction.ChangeType.DELETED -> "[-] "
-                                                else -> "[M] "
-                                            }
-                                            
-                                            // Use different color for test files
-                                            val textColor = if (file.isTestFile) Color.Green else MaterialTheme.colorScheme.onSurfaceVariant
-                                            
-                                            Text(
-                                                text = "$changePrefix${file.path}",
-                                                color = textColor,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } ?: run {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Select a commit to view details")
-                    }
-                }
-            }
-        }
+    /**
+     * Update the table with new data
+     */
+    fun updateData(newCommits: List<CommitInfo>) {
+        (commitsTable.model as CommitTableModel).updateData(newCommits)
+    }
+    
+    /**
+     * Highlight YouTrack tickets in commit message
+     */
+    private fun highlightYouTrackTickets(message: String): String {
+        val matcher = youtrackTicketPattern.matcher(message)
+        return matcher.replaceAll("**$1**") // Bold the ticket references
     }
 }
