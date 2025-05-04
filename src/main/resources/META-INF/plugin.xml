@@ -37,7 +37,7 @@
                            toolWindowId="VCS" 
                            isLogByDefault="true"/>
     </extensions>
-    
+
     <actions>
         <group id="IjCommitTracer.MainMenu" text="Commit Tracer" description="Commit Tracer Tool">
             <add-to-group group-id="MainMenu" anchor="last"/>
@@ -48,10 +48,10 @@
                     icon="/icons/git-commit.svg">
                 <keyboard-shortcut first-keystroke="control alt G" second-keystroke="L" keymap="$default"/>
             </action>
-            
+
             <!-- Add separator before YouTrack actions -->
             <separator/>
-            
+
             <!-- Add YouTrack token configuration actions -->
             <action id="IjCommitTracer.ConfigureYouTrackToken" 
                     class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
@@ -59,7 +59,7 @@
                     description="Set or update YouTrack API token"
                     icon="/icons/youtrack.svg">
             </action>
-            
+
             <action id="IjCommitTracer.ClearYouTrackToken" 
                     class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
                     text="Clear YouTrack Token" 
@@ -67,7 +67,7 @@
                     icon="/icons/youtrack.svg">
             </action>
         </group>
-        
+
         <group id="IjCommitTracer.VcsMenu" text="Commit Tracer" description="Commit Tracer Tool">
             <add-to-group group-id="VcsGroups" anchor="last"/>
             <action id="IjCommitTracer.ListCommitsVcs" 
@@ -76,10 +76,10 @@
                     description="Lists all commits in the current repository"
                     icon="/icons/git-commit.svg">
             </action>
-            
+
             <!-- Add separator before YouTrack actions -->
             <separator/>
-            
+
             <!-- Add YouTrack token configuration actions -->
             <action id="IjCommitTracer.ConfigureYouTrackTokenVcs" 
                     class="com.example.ijcommittracer.actions.ConfigureYouTrackTokenAction" 
@@ -87,7 +87,7 @@
                     description="Set or update YouTrack API token"
                     icon="/icons/youtrack.svg">
             </action>
-            
+
             <action id="IjCommitTracer.ClearYouTrackTokenVcs" 
                     class="com.example.ijcommittracer.actions.ClearYouTrackTokenAction" 
                     text="Clear YouTrack Token" 
@@ -95,7 +95,7 @@
                     icon="/icons/youtrack.svg">
             </action>
         </group>
-        
+
         <!-- Add to the VCS popup menu -->
         <action id="IjCommitTracer.ListCommitsPopup" 
                 class="com.example.ijcommittracer.actions.ListCommitsAction" 
@@ -103,6 +103,15 @@
                 description="Lists all commits in the current repository"
                 icon="/icons/git-commit.svg">
             <add-to-group group-id="VcsGroups" anchor="last"/>
+        </action>
+
+        <!-- Add export to JSON action to the Git log context menu -->
+        <action id="IjCommitTracer.ExportCommitsToJson"
+                class="com.example.ijcommittracer.actions.ExportCommitsToJsonAction"
+                text="Export to JSON"
+                description="Export selected commits to JSON format"
+                icon="/icons/git-commit.svg">
+            <add-to-group group-id="Vcs.Log.ContextMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>
